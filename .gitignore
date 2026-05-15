@@ -1,0 +1,57 @@
+# Data
+data_cache/
+data_prepared/
+audio_input/
+transcriptions.csv
+
+# Checkpoints & models
+checkpoints/
+*.pt
+*.onnx
+
+# Tokenizer artifacts (keep char_tokenizer.json and .gitkeep)
+tokenizer/bpe.model
+tokenizer/bpe.vocab
+
+# Test audio samples
+test_samples/
+
+# WandB
+wandb/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Environment
+.env
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Gradio
+.gradio/
+flagged/
+
+# Debug scripts
+debug_tokenizer.py
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
