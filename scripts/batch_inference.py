@@ -15,9 +15,9 @@ from metro_asr.model.tokenizer import build_tokenizer
 from metro_asr.data.features import LogMelFeatureExtractor, resample_audio
 
 # ─── Configuration ───────────────────────────────────────────────────────────
-CONFIG_PATH = "configs/metro_22m.yaml"
+CONFIG_PATH = "configs/metro_tiny.yaml"
 TOKENIZER_DIR = "tokenizer"
-CHECKPOINT_PATH = "checkpoints/metro-22m/best_model.pt"
+CHECKPOINT_PATH = "checkpoints/metro-tiny/best_model.pt"
 INPUT_DIR = "audio_input"
 OUTPUT_CSV = "transcriptions.csv"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"

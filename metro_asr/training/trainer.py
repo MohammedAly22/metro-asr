@@ -22,11 +22,15 @@ class MetroTrainer:
         self.world_size = dist.get_world_size() if self.distributed else 1
         self.is_main = self.rank == 0
 
-        self.device = torch.device(f"cuda:{self.rank}" if torch.cuda.is_available() else "cpu")
+        if torch.cuda.is_available():
+            gpu_idx = torch.cuda.current_device() if not self.distributed else self.rank
+            self.device = torch.device(f"cuda:{gpu_idx}")
+        else:
+            self.device = torch.device("cpu")
         self.model = model.to(self.device)
 
         if self.distributed:
-            self.model = DDP(self.model, device_ids=[self.rank], find_unused_parameters=False)
+            self.model = DDP(self.model, device_ids=[self.device.index], find_unused_parameters=False)
 
         self.raw_model = self.model.module if self.distributed else self.model
 
@@ -74,6 +78,8 @@ class MetroTrainer:
             collate_fn=collator,
             pin_memory=True,
             drop_last=True,
+            timeout=120,
+            persistent_workers=True if num_workers > 0 else False,
         )
 
         self.eval_loader = None
@@ -94,6 +100,7 @@ class MetroTrainer:
         self._last_blank_prob = 0.0
         self._last_grad_norm = 0.0
         self._nan_count = 0
+        self._consecutive_nans = 0
 
         if self.is_main:
             os.makedirs(self.checkpoint_dir, exist_ok=True)
@@ -146,10 +153,16 @@ class MetroTrainer:
                     if self._has_nan_grads():
                         self.optimizer.zero_grad(set_to_none=True)
                         self._nan_count += 1
+                        self._consecutive_nans += 1
                         if self.is_main and self._nan_count % 10 == 0:
-                            self.logger.warning(f"NaN gradients skipped: {self._nan_count} total")
+                            self.logger.warning(f"⚠️  NaN gradients skipped: {self._nan_count} total ({self._consecutive_nans} consecutive)")
+                        if self._consecutive_nans >= 50:
+                            self.logger.error("❌ 50 consecutive NaN batches — saving checkpoint and stopping")
+                            self._save_checkpoint("nan_recovery")
+                            raise RuntimeError("Training diverged: 50 consecutive NaN gradients")
                         accum_loss = 0.0
                         continue
+                    self._consecutive_nans = 0
 
                     if self.max_grad_norm > 0:
                         total_norm = nn.utils.clip_grad_norm_(

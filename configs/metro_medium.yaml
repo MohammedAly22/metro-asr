@@ -1,0 +1,72 @@
+model:
+  name: "metro-medium"
+  d_model: 512
+  n_layers: 24
+  n_heads: 8
+  ff_multiplier: 4
+  conv_kernel_size: 31
+  dropout: 0.1
+  conv_expansion_factor: 2
+  se_ratio: 4
+  stochastic_depth_rate: 0.1
+
+audio:
+  sample_rate: 16000
+  n_mels: 80
+  n_fft: 512
+  hop_length: 160
+  win_length: 400
+
+tokenizer:
+  type: "bpe"
+  vocab_size: 2000
+
+training:
+  batch_size: 16
+  grad_accumulation_steps: 4
+  learning_rate: 0.0005
+  warmup_steps: 15000
+  warmup_init_lr_ratio: 0.05
+  max_steps: 800000
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  bf16: true
+  min_lr_ratio: 0.05
+
+  ctc_loss_reduction: "mean"
+  intermediate_ctc_layers: [8, 16]
+  intermediate_ctc_weight: 0.3
+
+  max_audio_duration: 30.0
+  min_audio_duration: 0.5
+
+  spec_augment: true
+  freq_mask_param: 27
+  time_mask_param: 100
+  n_freq_masks: 2
+  n_time_masks: 10
+  speed_perturb: true
+  speed_perturb_factors: [0.9, 1.0, 1.1]
+
+  save_every_n_steps: 5000
+  eval_every_n_steps: 2000
+  log_every_n_steps: 10
+  checkpoint_dir: "checkpoints/metro-medium"
+  resume_from: null
+
+  wandb_project: "metro-asr"
+  wandb_run_name: "metro-medium"
+
+data:
+  datasets:
+    - "AlaaSamir/custom-egy-tts"
+    - "OmarAhmedSobhy/egyption-with-emotion-dataset"
+    - "MightyStudent/Egyptian-ASR-MGB-3"
+    - "MAdel121/arabic-egy-cleaned"
+    - "MAdel121/Continuation-egy-for-ultravox-v1"
+    - "Raniahossam33/Egyptian_TTS3RS"
+    - "ahmedbasemdev/egyptain-tts-dataset"
+    - "MohamedRashad/arabic-english-code-switching"
+  eval_split_ratio: 0.02
+  num_workers: 4
+  cache_dir: "data_cache"

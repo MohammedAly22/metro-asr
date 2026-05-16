@@ -1,3 +1,4 @@
+import argparse
 import os
 import sys
 import torch
@@ -12,11 +13,12 @@ from metro_asr.model.tokenizer import build_tokenizer
 from metro_asr.data.dataset import MetroASRDataset, load_hf_datasets
 from metro_asr.training.trainer import MetroTrainer
 
-# ─── Configuration ───────────────────────────────────────────────────────────
-CONFIG_PATH = "configs/metro_22m.yaml"
-TOKENIZER_DIR = "tokenizer"
+# ========================= CONFIGURATION =========================
+CONFIG_PATH = "configs/metro_tiny.yaml"
+TOKENIZER_DIR = "tokenizer_final"
 PREPARED_DATA_DIR = "data_prepared"
-# ─────────────────────────────────────────────────────────────────────────────
+GPU = None  # GPU device index (None = auto), overridden by --gpu flag
+# =================================================================
 
 
 def setup_distributed():
@@ -31,8 +33,16 @@ def setup_distributed():
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--gpu", type=int, default=GPU)
+    args = parser.parse_args()
+
     distributed = setup_distributed()
     rank = dist.get_rank() if distributed else 0
+
+    if args.gpu is not None and not distributed:
+        torch.cuda.set_device(args.gpu)
+
     logger = get_logger("metro-asr")
 
     if rank == 0:
@@ -56,7 +66,6 @@ def main():
         eval_data = load_from_disk(eval_path)
     else:
         logger.info("📂 No prepared data found, loading from HuggingFace...")
-        logger.info("   (Run scripts/prepare_data.py first for faster startup)")
         dataset = load_hf_datasets(
             config["data"]["datasets"],
             config,
@@ -67,14 +76,14 @@ def main():
         train_data = split["train"]
         eval_data = split["test"]
 
-    logger.info(f"   Train: {len(train_data)} | Eval: {len(eval_data)}")
+    logger.info(f"   📊 Train: {len(train_data):,} | Eval: {len(eval_data):,}")
 
     train_dataset = MetroASRDataset(train_data, tokenizer, config, is_training=True)
     eval_dataset = MetroASRDataset(eval_data, tokenizer, config, is_training=False)
 
     model = MetroASR.from_config(config)
     if rank == 0:
-        logger.info(f"🏗️  Model parameters: {model.count_parameters():,}")
+        logger.info(f"🏗️  Model: {model.count_parameters():,} params")
 
     trainer = MetroTrainer(model, train_dataset, eval_dataset, tokenizer, config, logger)
     trainer.train()

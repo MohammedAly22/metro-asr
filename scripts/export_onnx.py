@@ -10,10 +10,10 @@ from metro_asr.model.metro import MetroASR
 from metro_asr.model.tokenizer import build_tokenizer
 
 # ─── Configuration ───────────────────────────────────────────────────────────
-CONFIG_PATH = "configs/metro_22m.yaml"
+CONFIG_PATH = "configs/metro_tiny.yaml"
 TOKENIZER_DIR = "tokenizer"
-CHECKPOINT_PATH = "checkpoints/metro-22m/best_model.pt"
-OUTPUT_PATH = "exports/metro_22m.onnx"
+CHECKPOINT_PATH = "checkpoints/metro-tiny/best_model.pt"
+OUTPUT_PATH = "exports/metro_tiny.onnx"
 OPSET_VERSION = 17
 MAX_AUDIO_FRAMES = 3000
 # ─────────────────────────────────────────────────────────────────────────────

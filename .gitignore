@@ -9,9 +9,20 @@ checkpoints/
 *.pt
 *.onnx
 
-# Tokenizer artifacts (keep char_tokenizer.json and .gitkeep)
+# Language model files
+lm/*.arpa
+lm/*.bin
+lm/corpus.txt
+
+# KenLM build artifacts
+kenlm_build/
+
+# Tokenizer binary artifacts
 tokenizer/bpe.model
 tokenizer/bpe.vocab
+tokenizer_final/bpe.model
+tokenizer_final/bpe.vocab
+tokenizer_bpe600/
 
 # Test audio samples
 test_samples/
@@ -55,3 +66,7 @@ debug_tokenizer.py
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb
+
+# Misc
+*.log
+*.tmp

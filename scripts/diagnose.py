@@ -20,7 +20,7 @@ from metro_asr.model.tokenizer import build_tokenizer
 from metro_asr.data.dataset import MetroASRDataset
 from metro_asr.data.collator import MetroCollator
 
-CONFIG_PATH = "configs/metro_22m.yaml"
+CONFIG_PATH = "configs/metro_tiny.yaml"
 TOKENIZER_DIR = "tokenizer"
 PREPARED_DATA_DIR = "data_prepared"
 

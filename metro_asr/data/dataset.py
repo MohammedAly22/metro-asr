@@ -91,6 +91,7 @@ DATASET_COLUMN_OVERRIDES = {
     "MAdel121/Continuation-egy-for-ultravox-v1": {"audio": "audio", "text": "text"},
     "Raniahossam33/Egyptian_TTS3RS": {"audio": "audio", "text": "text"},
     "ahmedbasemdev/egyptain-tts-dataset": {"audio": "audio", "text": "text"},
+    "MohamedRashad/arabic-english-code-switching": {"audio": "audio", "text": "sentence"},
 }
 
 
@@ -151,9 +152,16 @@ class MetroASRDataset(Dataset):
         config,
         is_training=True,
     ):
-        self.data = data
         self.tokenizer = tokenizer
         self.is_training = is_training
+
+        try:
+            from datasets.features import Audio as HFAudio
+            if "audio" in data.column_names:
+                data = data.cast_column("audio", HFAudio(decode=False))
+        except Exception:
+            pass
+        self.data = data
 
         audio_cfg = config["audio"]
         train_cfg = config["training"]
@@ -221,6 +229,12 @@ class MetroASRDataset(Dataset):
         return np.array(audio_data, dtype=np.float32), self.sample_rate
 
     def __getitem__(self, idx):
+        try:
+            return self._get_sample(idx)
+        except Exception:
+            return self._get_sample((idx + 1) % len(self.data))
+
+    def _get_sample(self, idx):
         item = self.data[idx]
 
         audio_data = item["audio"]
@@ -230,6 +244,10 @@ class MetroASRDataset(Dataset):
             waveform = resample_audio(waveform, sr, self.sample_rate)
             if isinstance(waveform, torch.Tensor):
                 waveform = waveform.numpy()
+
+        duration = len(waveform) / self.sample_rate
+        if duration > self.max_duration or duration < self.min_duration:
+            return self._get_sample((idx + 1) % len(self.data))
 
         if self.is_training and self.speed_perturb is not None:
             waveform = self.speed_perturb(waveform)

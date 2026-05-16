@@ -1,19 +1,34 @@
 import os
 import sys
+import random
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from metro_asr.data.dataset import load_hf_datasets, normalize_arabic_text  # noqa: patches Audio decoder
+from metro_asr.data.dataset import load_hf_datasets, normalize_arabic_text
 from metro_asr.utils.config import load_config
 from metro_asr.utils.logger import get_logger, print_banner
-from metro_asr.model.tokenizer import CharTokenizer, BPETokenizer
 
 # ─── Configuration ───────────────────────────────────────────────────────────
-CONFIG_PATH = "configs/metro_22m.yaml"
-TOKENIZER_DIR = "tokenizer"
+CONFIG_PATH = "configs/metro_tiny.yaml"
 OUTPUT_DIR = "data_prepared"
-MAX_SAMPLES_FOR_TOKENIZER = 200000
+
+# Test split: small curated set with guaranteed Arabic + CS samples for WER eval
+TEST_SPLIT_SIZE = 500               # Total test samples
+TEST_CS_GUARANTEED = 200            # Guaranteed code-switching samples in test
+TEST_ARABIC_GUARANTEED = 300        # Guaranteed pure Egyptian Arabic samples in test
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+def is_code_switching(text):
+    has_arabic = any("؀" <= c <= "ۿ" for c in text)
+    has_english = any("a" <= c.lower() <= "z" for c in text)
+    return has_arabic and has_english
+
+
+def is_pure_arabic(text):
+    has_arabic = any("؀" <= c <= "ۿ" for c in text)
+    has_english = any("a" <= c.lower() <= "z" for c in text)
+    return has_arabic and not has_english
 
 
 def main():
@@ -22,7 +37,6 @@ def main():
 
     config = load_config(CONFIG_PATH)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    os.makedirs(TOKENIZER_DIR, exist_ok=True)
 
     logger.info("📂 Loading and merging all datasets...")
     dataset = load_hf_datasets(
@@ -31,7 +45,6 @@ def main():
         cache_dir=config["data"].get("cache_dir"),
     )
 
-    # ── Text cleaning: isolate text to avoid audio overhead ──
     logger.info("🧹 Cleaning transcriptions...")
     original_len = len(dataset)
 
@@ -54,39 +67,76 @@ def main():
     dataset = dataset.remove_columns(["text"])
     dataset = dataset.add_column("text", valid_texts)
 
-    logger.info(f"   Kept {len(dataset)}/{original_len} samples after cleaning")
+    logger.info(f"   ✅ Kept {len(dataset)}/{original_len} samples after cleaning")
 
-    # ── Tokenizer ──
-    tok_type = config["tokenizer"].get("type", "char")
-    tok_vocab_size = config["tokenizer"].get("vocab_size", 2000)
+    # ── Build curated test split ──
+    logger.info("🧪 Building curated test split...")
 
-    logger.info("🔤 Building tokenizer...")
-    if tok_type == "bpe":
-        logger.info(f"   Training BPE tokenizer (vocab_size={tok_vocab_size})...")
-        n_samples = min(MAX_SAMPLES_FOR_TOKENIZER, len(valid_texts))
-        texts_for_tok = valid_texts[:n_samples]
+    cs_indices = []
+    arabic_indices = []
+    other_indices = []
 
-        model_prefix = os.path.join(TOKENIZER_DIR, "bpe")
-        BPETokenizer.train(texts_for_tok, model_prefix, vocab_size=tok_vocab_size)
-        logger.info(f"   BPE model saved to {model_prefix}.model")
-    else:
-        char_tokenizer = CharTokenizer()
-        char_path = os.path.join(TOKENIZER_DIR, "char_tokenizer.json")
-        char_tokenizer.save(char_path)
-        logger.info(f"   Char tokenizer saved to {char_path} (vocab_size={char_tokenizer.vocab_size})")
+    for i, t in enumerate(valid_texts):
+        if is_code_switching(t):
+            cs_indices.append(i)
+        elif is_pure_arabic(t):
+            arabic_indices.append(i)
+        else:
+            other_indices.append(i)
+
+    logger.info(f"   🌍 Code-switching samples available: {len(cs_indices)}")
+    logger.info(f"   🇪🇬 Pure Arabic samples available: {len(arabic_indices)}")
+
+    random.seed(42)
+    random.shuffle(cs_indices)
+    random.shuffle(arabic_indices)
+
+    n_cs = min(TEST_CS_GUARANTEED, len(cs_indices))
+    n_arabic = min(TEST_ARABIC_GUARANTEED, len(arabic_indices))
+    remaining = TEST_SPLIT_SIZE - n_cs - n_arabic
+
+    test_indices = set()
+    test_indices.update(cs_indices[:n_cs])
+    test_indices.update(arabic_indices[:n_arabic])
+
+    if remaining > 0:
+        leftover = [i for i in range(len(valid_texts)) if i not in test_indices]
+        random.shuffle(leftover)
+        test_indices.update(leftover[:remaining])
+
+    test_indices = sorted(test_indices)
+    train_indices = sorted(set(range(len(valid_texts))) - set(test_indices))
+
+    test_cs_count = sum(1 for i in test_indices if is_code_switching(valid_texts[i]))
+    test_ar_count = sum(1 for i in test_indices if is_pure_arabic(valid_texts[i]))
+
+    logger.info(f"   📊 Test split: {len(test_indices)} samples")
+    logger.info(f"      🌍 Code-switching: {test_cs_count}")
+    logger.info(f"      🇪🇬 Pure Arabic:    {test_ar_count}")
+
+    # ── Train/eval/test split ──
+    eval_ratio = config["data"].get("eval_split_ratio", 0.02)
+    train_dataset = dataset.select(train_indices)
+
+    eval_size = int(len(train_dataset) * eval_ratio)
+    train_eval_split = train_dataset.train_test_split(test_size=eval_size, seed=42)
+
+    test_dataset = dataset.select(test_indices)
 
     # ── Save ──
     logger.info("💾 Saving prepared dataset...")
-    eval_ratio = config["data"].get("eval_split_ratio", 0.02)
-    split = dataset.train_test_split(test_size=eval_ratio, seed=42)
 
     train_path = os.path.join(OUTPUT_DIR, "train")
     eval_path = os.path.join(OUTPUT_DIR, "eval")
-    split["train"].save_to_disk(train_path)
-    split["test"].save_to_disk(eval_path)
+    test_path = os.path.join(OUTPUT_DIR, "test")
 
-    logger.info(f"   Train: {len(split['train'])} → {train_path}")
-    logger.info(f"   Eval:  {len(split['test'])} → {eval_path}")
+    train_eval_split["train"].save_to_disk(train_path)
+    train_eval_split["test"].save_to_disk(eval_path)
+    test_dataset.save_to_disk(test_path)
+
+    logger.info(f"   📁 Train: {len(train_eval_split['train']):,} → {train_path}")
+    logger.info(f"   📁 Eval:  {len(train_eval_split['test']):,} → {eval_path}")
+    logger.info(f"   📁 Test:  {len(test_dataset):,} → {test_path}")
 
     # ── Statistics ──
     logger.info("\n📊 Dataset Statistics:")
@@ -97,16 +147,27 @@ def main():
 
     has_arabic = sum(1 for t in sample_texts if any("؀" <= c <= "ۿ" for c in t))
     has_english = sum(1 for t in sample_texts if any("a" <= c.lower() <= "z" for c in t))
-    has_both = sum(
-        1 for t in sample_texts
-        if any("؀" <= c <= "ۿ" for c in t) and any("a" <= c.lower() <= "z" for c in t)
-    )
+    has_both = sum(1 for t in sample_texts if is_code_switching(t))
 
-    logger.info(f"   Avg text length: {avg_len:.1f} chars")
-    logger.info(f"   Max text length: {max_len} chars")
-    logger.info(f"   Arabic-only:     {has_arabic - has_both} ({(has_arabic - has_both) / len(sample_texts) * 100:.1f}%)")
-    logger.info(f"   English-only:    {has_english - has_both} ({(has_english - has_both) / len(sample_texts) * 100:.1f}%)")
-    logger.info(f"   Code-switching:  {has_both} ({has_both / len(sample_texts) * 100:.1f}%)")
+    logger.info(f"   📏 Avg text length: {avg_len:.1f} chars")
+    logger.info(f"   📏 Max text length: {max_len} chars")
+    logger.info(f"   🇪🇬 Arabic-only:     {has_arabic - has_both} ({(has_arabic - has_both) / len(sample_texts) * 100:.1f}%)")
+    logger.info(f"   🇬🇧 English-only:    {has_english - has_both} ({(has_english - has_both) / len(sample_texts) * 100:.1f}%)")
+    logger.info(f"   🌍 Code-switching:  {has_both} ({has_both / len(sample_texts) * 100:.1f}%)")
+
+    # ── Test split sample preview ──
+    logger.info("\n🔎 Test split samples:")
+    test_texts = [valid_texts[i] for i in test_indices]
+    cs_samples = [t for t in test_texts if is_code_switching(t)]
+    ar_samples = [t for t in test_texts if is_pure_arabic(t)]
+
+    logger.info("   🌍 Code-switching examples:")
+    for t in cs_samples[:5]:
+        logger.info(f"      • {t}")
+
+    logger.info("   🇪🇬 Pure Arabic examples:")
+    for t in ar_samples[:5]:
+        logger.info(f"      • {t}")
 
     logger.info("\n✅ Data preparation complete!")
 
