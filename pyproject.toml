@@ -1,0 +1,90 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "metro-asr"
+version = "0.2.0"
+description = "Non-Autoregressive CTC Speech Recognition for Egyptian Arabic + Code-Switching"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [
+    {name = "Mohammed Aly", email = "mae678900@gmail.com"},
+]
+keywords = ["asr", "speech-recognition", "arabic", "egyptian-arabic", "code-switching", "ctc", "conformer"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+
+dependencies = [
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+    "numpy<2.0.0",
+    "pyyaml>=6.0",
+    "sentencepiece>=0.1.99",
+    "soundfile>=0.12.0",
+    "huggingface_hub>=0.20.0",
+]
+
+[project.optional-dependencies]
+cpu = [
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+]
+gpu = [
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+]
+lm = [
+    "pyctcdecode>=0.5.0",
+    "kenlm",
+]
+server = [
+    "flask>=3.0.0",
+]
+demo = [
+    "gradio>=4.0.0",
+]
+train = [
+    "datasets>=2.16.0",
+    "wandb>=0.16.0",
+    "jiwer>=3.0.0",
+    "rich>=13.0.0",
+    "librosa>=0.10.0",
+]
+all = [
+    "metro-asr[lm,server,demo,train]",
+]
+dev = [
+    "metro-asr[all]",
+    "pytest>=7.0",
+    "ruff>=0.3.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/MohammedAly22/Metro-ASR"
+Repository = "https://github.com/MohammedAly22/Metro-ASR"
+Documentation = "https://github.com/MohammedAly22/Metro-ASR#readme"
+Issues = "https://github.com/MohammedAly22/Metro-ASR/issues"
+HuggingFace = "https://huggingface.co/MohammedAly22"
+
+[tool.setuptools.packages.find]
+include = ["metro_asr*"]
+
+[tool.setuptools.package-data]
+metro_asr = ["*.yaml", "*.json"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"

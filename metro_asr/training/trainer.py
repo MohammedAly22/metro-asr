@@ -30,7 +30,7 @@ class MetroTrainer:
         self.model = model.to(self.device)
 
         if self.distributed:
-            self.model = DDP(self.model, device_ids=[self.device.index], find_unused_parameters=False)
+            self.model = DDP(self.model, device_ids=[self.device.index], find_unused_parameters=True)
 
         self.raw_model = self.model.module if self.distributed else self.model
 
@@ -111,11 +111,13 @@ class MetroTrainer:
             import wandb
             project = train_cfg.get("wandb_project", "metro-asr")
             run_name = train_cfg.get("wandb_run_name") or f"metro-{self.config['model']['name']}"
+            run_id = os.environ.get("WANDB_RUN_ID")
             self.wandb_run = wandb.init(
                 project=project,
                 name=run_name,
+                id=run_id,
                 config=self.config,
-                resume="allow",
+                resume="allow" if run_id else None,
             )
         except ImportError:
             self.logger.warning("wandb not installed, skipping logging")

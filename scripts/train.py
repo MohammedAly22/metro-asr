@@ -14,9 +14,9 @@ from metro_asr.data.dataset import MetroASRDataset, load_hf_datasets
 from metro_asr.training.trainer import MetroTrainer
 
 # ========================= CONFIGURATION =========================
-CONFIG_PATH = "configs/metro_tiny.yaml"
-TOKENIZER_DIR = "tokenizer_final"
-PREPARED_DATA_DIR = "data_prepared"
+CONFIG_PATH = "configs/metro_small.yaml"
+TOKENIZER_DIR = "tokenizer_bpe5k_v2"
+PREPARED_DATA_DIR = "data_prepared_v2"
 GPU = None  # GPU device index (None = auto), overridden by --gpu flag
 # =================================================================
 

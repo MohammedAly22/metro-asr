@@ -13,16 +13,16 @@ from metro_asr.model.tokenizer import build_tokenizer
 from metro_asr.data.features import LogMelFeatureExtractor, resample_audio
 
 # ========================= CONFIGURATION =========================
-AUDIO_PATH = "test_samples/test_5.wav"
-CONFIG_PATH = "configs/metro_tiny.yaml"
-CHECKPOINT_PATH = "checkpoints/metro-tiny/best_model.pt"
-TOKENIZER_DIR = "tokenizer_final"
+AUDIO_PATH = "test_samples/test_1.wav"
+CONFIG_PATH = "configs/metro_small.yaml"
+CHECKPOINT_PATH = "checkpoints/metro-small-v2/best_model.pt"
+TOKENIZER_DIR = "tokenizer_bpe5k_v2"
 DEVICE = "cpu"  # "auto", "cpu", or "cuda"
 
-LM_PATH = "lm/lm_4gram.arpa"  # Path to KenLM .arpa or .bin file (None = greedy only)
-BEAM_WIDTH = 100
+LM_PATH = "lm_v2/lm_5gram.bin"  # Path to KenLM .arpa or .bin file (None = greedy only)
+BEAM_WIDTH = 200
 LM_ALPHA = 0.5   # LM weight — keep moderate so LM doesn't kill English words
-LM_BETA = 5.0    # Word insertion bonus — high to prevent word deletion
+LM_BETA = 3.0    # Word insertion bonus — high to prevent word deletion
 
 # Set to True to sweep alpha/beta and find optimal values
 TUNE_MODE = False

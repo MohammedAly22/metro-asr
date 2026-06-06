@@ -13,15 +13,15 @@ from metro_asr.data.dataset import MetroASRDataset, load_hf_datasets
 from metro_asr.training.trainer import MetroTrainer
 
 # ─── Configuration ───────────────────────────────────────────────────────────
-CONFIG_PATH = "configs/metro_tiny_char.yaml"
-TOKENIZER_DIR = "tokenizer"
-PRETRAINED_CHECKPOINT = "checkpoints/metro-22m/best_model.pt"
+CONFIG_PATH = "configs/metro_tiny.yaml"
+TOKENIZER_DIR = "tokenizer_final"
+PRETRAINED_CHECKPOINT = "checkpoints/metro-tiny/final_model.pt"
 
 FINETUNE_DATASET = "MohamedRashad/arabic-english-code-switching"
-FINETUNE_LR = 1e-4
-FINETUNE_MAX_STEPS = 50000
-FINETUNE_WARMUP_STEPS = 2000
-FREEZE_ENCODER_STEPS = 5000
+FINETUNE_LR = 5e-5
+FINETUNE_MAX_STEPS = 30000
+FINETUNE_WARMUP_STEPS = 1000
+FREEZE_ENCODER_STEPS = 3000
 
 PREPARED_DATA_DIR = None  # Set to path if you pre-prepared CS data, else loads from HF
 # ─────────────────────────────────────────────────────────────────────────────
@@ -71,6 +71,7 @@ def main():
     config["training"]["learning_rate"] = FINETUNE_LR
     config["training"]["max_steps"] = FINETUNE_MAX_STEPS
     config["training"]["warmup_steps"] = FINETUNE_WARMUP_STEPS
+    config["training"]["resume_from"] = None  # Don't resume — we load weights via PRETRAINED_CHECKPOINT
     config["training"]["checkpoint_dir"] = config["training"]["checkpoint_dir"].rstrip("/") + "-cs-finetune"
     config["training"]["wandb_run_name"] = (config["training"].get("wandb_run_name") or "metro") + "-cs-finetune"
 

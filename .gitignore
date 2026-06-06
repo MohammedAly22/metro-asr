@@ -1,8 +1,12 @@
 # Data
 data_cache/
 data_prepared/
+data_prepared_v2/
+data_transcribed/
 audio_input/
 transcriptions.csv
+retranscribed/
+tmp_audio/
 
 # Checkpoints & models
 checkpoints/
@@ -13,16 +17,18 @@ checkpoints/
 lm/*.arpa
 lm/*.bin
 lm/corpus.txt
+lm_v2/
 
 # KenLM build artifacts
 kenlm_build/
 
 # Tokenizer binary artifacts
-tokenizer/bpe.model
-tokenizer/bpe.vocab
-tokenizer_final/bpe.model
-tokenizer_final/bpe.vocab
+tokenizer/
+tokenizer_final/
 tokenizer_bpe600/
+tokenizer_bpe1000/
+tokenizer_bpe5k/
+tokenizer_bpe5k_v2/
 
 # Test audio samples
 test_samples/
@@ -60,13 +66,41 @@ Thumbs.db
 .gradio/
 flagged/
 
-# Debug scripts
-debug_tokenizer.py
-
 # Jupyter
 .ipynb_checkpoints/
-*.ipynb
 
 # Misc
 *.log
 *.tmp
+
+# Debug / internal scripts (not part of public release)
+debug_tokenizer.py
+scripts/diagnose.py
+scripts/test_qwen_transcribe.py
+scripts/testing_qwen.py
+scripts/test_gemma4.py
+scripts/serve_qwen_omni.py
+scripts/qwen_server.py
+scripts/gemma_server.py
+scripts/serve_qwen_omni.py
+scripts/gemma_bulk_transcribe.py
+scripts/qwen_bulk_transcribe.py
+scripts/gemini_retranscribe.py
+scripts/bulk_transcribe.py
+scripts/count_hours.py
+scripts/filter_transcriptions.py
+scripts/evaluate_transcribers.py
+scripts/eval_checkpoints.py
+scripts/prepare_data_v2.py
+scripts/prepare_final_tokenizer.py
+scripts/batch_inference.py
+scripts/export_onnx.py
+scripts/train_tokenizer_v2.py
+scripts/train_lm_v2.py
+
+# Evaluation results
+eval_results/
+evaluation_results/
+
+# Claude worktrees
+.claude/

@@ -18,8 +18,8 @@ import shutil
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # ========================= CONFIGURATION =========================
-ORDER = 4                          # N-gram order (3, 4, or 5)
-OUTPUT_DIR = "lm"
+ORDER = 5                          # 5-gram for better English phrase modeling
+OUTPUT_DIR = "lm_v2"
 DATA_DIR = "data_prepared/train"    # Prepared Arabic transcripts
 MAX_SAMPLES = 500000
 
@@ -31,8 +31,8 @@ CS_DATASET = "MohamedRashad/arabic-english-code-switching"  # HF dataset or loca
 CS_TEXT_COL = "sentence"
 CS_UPSAMPLE = 20                    # Repeat CS data N times (12k * 20 = 240k, balances vs 750k Arabic)
 
-ENGLISH_DATASET = "ag_news"         # English text for LM to learn English n-grams (or None)
-MAX_ENGLISH_SAMPLES = 50000
+ENGLISH_DATASET = "librispeech_asr" # Use LibriSpeech transcripts instead of ag_news
+MAX_ENGLISH_SAMPLES = 200000        # More English for better CS decoding
 
 EXTRA_TEXT_FILE = None              # Path to additional text file (one per line)
 CACHE_DIR = "data_cache"
@@ -169,15 +169,36 @@ def main():
     # 4. English text (so LM knows English n-grams for code-switching)
     if ENGLISH_DATASET:
         from datasets import load_dataset
-        print(f"Loading English text: {ENGLISH_DATASET}...")
-        ds = load_dataset(ENGLISH_DATASET, split="train", cache_dir=CACHE_DIR)
         english_texts = []
-        for item in ds:
-            t = item["text"].strip()
-            if t and len(t) >= 10:
-                english_texts.append(t.lower())
-            if len(english_texts) >= MAX_ENGLISH_SAMPLES:
-                break
+
+        if ENGLISH_DATASET == "librispeech_asr":
+            print("Loading English from LibriSpeech transcripts...")
+            for split in ["train.clean.100", "train.clean.360", "train.other.500"]:
+                try:
+                    ds = load_dataset("librispeech_asr",
+                                      "clean" if "clean" in split else "other",
+                                      split=split, cache_dir=CACHE_DIR, trust_remote_code=True)
+                    for item in ds:
+                        t = item["text"].strip()
+                        if t and len(t) >= 5:
+                            english_texts.append(t.lower())
+                        if len(english_texts) >= MAX_ENGLISH_SAMPLES:
+                            break
+                    print(f"  LibriSpeech {split}: total so far {len(english_texts)}")
+                except Exception as e:
+                    print(f"  ⚠️ Could not load {split}: {e}")
+                if len(english_texts) >= MAX_ENGLISH_SAMPLES:
+                    break
+        else:
+            print(f"Loading English text: {ENGLISH_DATASET}...")
+            ds = load_dataset(ENGLISH_DATASET, split="train", cache_dir=CACHE_DIR)
+            for item in ds:
+                t = item["text"].strip()
+                if t and len(t) >= 10:
+                    english_texts.append(t.lower())
+                if len(english_texts) >= MAX_ENGLISH_SAMPLES:
+                    break
+
         print(f"  English sentences: {len(english_texts)}")
         texts.extend(english_texts)
 

@@ -92,6 +92,10 @@ DATASET_COLUMN_OVERRIDES = {
     "Raniahossam33/Egyptian_TTS3RS": {"audio": "audio", "text": "text"},
     "ahmedbasemdev/egyptain-tts-dataset": {"audio": "audio", "text": "text"},
     "MohamedRashad/arabic-english-code-switching": {"audio": "audio", "text": "sentence"},
+    # Dahee7 Egyptian Arabic
+    "HeshamHaroon/Dahee7": {"audio": "audio", "text": "transcription"},
+    # English ASR datasets
+    "librispeech_asr": {"audio": "audio", "text": "text"},
 }
 
 
@@ -278,11 +282,28 @@ def load_hf_datasets(dataset_names, config, cache_dir=None, streaming=False):
     target_sr = config["audio"]["sample_rate"]
     all_datasets = []
 
-    for ds_name in dataset_names:
+    for ds_entry in dataset_names:
+        # Support "dataset_name:config:split" notation
+        # e.g. "librispeech_asr:clean:train.100" or "librispeech_asr:clean"
+        parts = ds_entry.split(":")
+        ds_name = parts[0]
+        ds_config = parts[1] if len(parts) > 1 else None
+        ds_split = parts[2] if len(parts) > 2 else None
+
         try:
-            ds = load_dataset(ds_name, cache_dir=cache_dir, trust_remote_code=True)
-        except TypeError:
-            ds = load_dataset(ds_name, cache_dir=cache_dir)
+            kwargs = {"cache_dir": cache_dir}
+            if ds_config:
+                kwargs["name"] = ds_config
+            if ds_split:
+                kwargs["split"] = ds_split
+
+            try:
+                ds = load_dataset(ds_name, trust_remote_code=True, **kwargs)
+            except TypeError:
+                ds = load_dataset(ds_name, **kwargs)
+
+            if ds_split:
+                ds = {"train": ds} if not isinstance(ds, dict) else ds
         except Exception:
             try:
                 ds = load_dataset(ds_name, split="train", cache_dir=cache_dir, trust_remote_code=True)
@@ -292,10 +313,10 @@ def load_hf_datasets(dataset_names, config, cache_dir=None, streaming=False):
                     ds = load_dataset(ds_name, split="train", cache_dir=cache_dir)
                     ds = {"train": ds}
                 except Exception as e:
-                    print(f"❌ Failed to load {ds_name}: {e}")
+                    print(f"❌ Failed to load {ds_entry}: {e}")
                     continue
             except Exception as e:
-                print(f"❌ Failed to load {ds_name}: {e}")
+                print(f"❌ Failed to load {ds_entry}: {e}")
                 continue
 
         if isinstance(ds, dict):

@@ -52,7 +52,7 @@ training:
   eval_every_n_steps: 1000
   log_every_n_steps: 10
   checkpoint_dir: "checkpoints/metro-tiny"
-  resume_from: "checkpoints/metro-tiny/checkpoint_step_60000.pt"
+  resume_from: None
 
   wandb_project: "metro-asr"
   wandb_run_name: "metro-tiny"
