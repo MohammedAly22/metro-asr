@@ -741,11 +741,10 @@ ship the general one.
 | `medical_1.wav`   | medical   | 13.8 s |           42.3 | **30.8** | **30.8** | **30.8** |
 | `medical_2.wav`   | medical   |  9.8 s |           47.8 | **39.1** |           47.8 | **39.1** |
 
+
 ### Worked example — technical
 
 Reference (`technical_1.wav`, 17.6 s):
-
-<div dir="rtl" align="right">
 
 | Decoder                  |              WER | What happened to the English                                                                          |
 | ------------------------ | ---------------: | ----------------------------------------------------------------------------------------------------- |
