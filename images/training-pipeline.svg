@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 540" width="1060" height="540"
+     font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg7" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B0F17"/>
+      <stop offset="100%" stop-color="#0E1420"/>
+    </linearGradient>
+    <linearGradient id="acc7" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#E8232A"/>
+      <stop offset="100%" stop-color="#FF5A60"/>
+    </linearGradient>
+    <marker id="a7" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#4A5878"/>
+    </marker>
+    <marker id="a7a" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#F5A524"/>
+    </marker>
+  </defs>
+
+  <rect width="1060" height="540" fill="url(#bg7)"/>
+
+  <rect x="50" y="30" width="4" height="22" rx="2" fill="url(#acc7)"/>
+  <text x="68" y="48" fill="#E8EDF5" font-size="20" font-weight="700">Training a variant from scratch</text>
+  <text x="68" y="70" fill="#8A99B3" font-size="12.5">Four stages. Stages 2 and 3 are independent of each other and can run in parallel.</text>
+
+  <!-- stage 1 -->
+  <rect x="50" y="104" width="228" height="150" rx="12" fill="#131A26" stroke="#26314A"/>
+  <rect x="50" y="104" width="228" height="4" rx="2" fill="url(#acc7)"/>
+  <circle cx="76" cy="134" r="13" fill="#2A1215" stroke="#7A1D22"/>
+  <text x="76" y="139" fill="#FF8A8F" font-size="12" font-weight="700" text-anchor="middle">1</text>
+  <text x="100" y="139" fill="#E8EDF5" font-size="14" font-weight="600">Prepare data</text>
+  <text x="70" y="166" fill="#8A99B3" font-size="11.5" font-family="ui-monospace, Consolas, monospace">prepare_data.py</text>
+  <text x="70" y="190" fill="#8A99B3" font-size="11.5">merge datasets · normalise</text>
+  <text x="70" y="207" fill="#8A99B3" font-size="11.5">text · drop clips outside</text>
+  <text x="70" y="224" fill="#8A99B3" font-size="11.5">0.5–30 s · curated test split</text>
+  <text x="70" y="244" fill="#5BC98D" font-size="11">→ data_prepared/{train,eval,test}</text>
+
+  <path d="M278,179 L316,179" stroke="#4A5878" stroke-width="1.6" marker-end="url(#a7)"/>
+
+  <!-- stage 2 -->
+  <rect x="320" y="104" width="228" height="150" rx="12" fill="#131A26" stroke="#26314A"/>
+  <rect x="320" y="104" width="228" height="4" rx="2" fill="url(#acc7)"/>
+  <circle cx="346" cy="134" r="13" fill="#2A1215" stroke="#7A1D22"/>
+  <text x="346" y="139" fill="#FF8A8F" font-size="12" font-weight="700" text-anchor="middle">2</text>
+  <text x="370" y="139" fill="#E8EDF5" font-size="14" font-weight="600">Train the tokenizer</text>
+  <text x="340" y="166" fill="#8A99B3" font-size="11.5" font-family="ui-monospace, Consolas, monospace">train_bpe_tokenizer.py</text>
+  <text x="340" y="190" fill="#8A99B3" font-size="11.5">SentencePiece BPE on a</text>
+  <text x="340" y="207" fill="#8A99B3" font-size="11.5">50/50 Arabic–English corpus</text>
+  <text x="340" y="224" fill="#8A99B3" font-size="11.5">so both stay whole-word</text>
+  <text x="340" y="244" fill="#5BC98D" font-size="11">→ bpe.model · bpe.vocab</text>
+
+  <path d="M548,179 L586,179" stroke="#4A5878" stroke-width="1.6" marker-end="url(#a7)"/>
+
+  <!-- stage 4 (train) -->
+  <rect x="590" y="104" width="228" height="150" rx="12" fill="#131A26" stroke="#33405E"/>
+  <rect x="590" y="104" width="228" height="4" rx="2" fill="url(#acc7)"/>
+  <circle cx="616" cy="134" r="13" fill="#2A1215" stroke="#7A1D22"/>
+  <text x="616" y="139" fill="#FF8A8F" font-size="12" font-weight="700" text-anchor="middle">4</text>
+  <text x="640" y="139" fill="#E8EDF5" font-size="14" font-weight="600">Train the model</text>
+  <text x="610" y="166" fill="#8A99B3" font-size="11.5" font-family="ui-monospace, Consolas, monospace">train.py</text>
+  <text x="610" y="190" fill="#8A99B3" font-size="11.5">CTC + auxiliary CTC ·</text>
+  <text x="610" y="207" fill="#8A99B3" font-size="11.5">AdamW · warmup→cosine ·</text>
+  <text x="610" y="224" fill="#8A99B3" font-size="11.5">bf16 · DDP · SpecAugment</text>
+  <text x="610" y="244" fill="#5BC98D" font-size="11">→ best_model.pt</text>
+
+  <path d="M818,179 L856,179" stroke="#4A5878" stroke-width="1.6" marker-end="url(#a7)"/>
+
+  <!-- eval -->
+  <rect x="860" y="128" width="150" height="102" rx="12" fill="#0F1D17" stroke="#2C5C43"/>
+  <text x="935" y="156" fill="#5BC98D" font-size="13.5" font-weight="600" text-anchor="middle">Evaluate</text>
+  <text x="880" y="180" fill="#8A99B3" font-size="11.5" font-family="ui-monospace, Consolas, monospace">evaluate.py</text>
+  <text x="880" y="202" fill="#8A99B3" font-size="11.5">WER / CER, split by</text>
+  <text x="880" y="219" fill="#8A99B3" font-size="11.5">Arabic vs code-switch</text>
+
+  <!-- stage 3 (LM) — branches off stage 1, feeds evaluation/decoding -->
+  <path d="M164,254 L164,306" stroke="#F5A524" stroke-width="1.6" stroke-dasharray="5 4" fill="none"/>
+  <path d="M164,306 L316,306" stroke="#F5A524" stroke-width="1.6" stroke-dasharray="5 4" fill="none" marker-end="url(#a7a)"/>
+
+  <rect x="320" y="278" width="228" height="150" rx="12" fill="#1C1710" stroke="#5C3D14"/>
+  <rect x="320" y="278" width="228" height="4" rx="2" fill="#F5A524"/>
+  <circle cx="346" cy="308" r="13" fill="#2A2214" stroke="#8A5A1E"/>
+  <text x="346" y="313" fill="#F5A524" font-size="12" font-weight="700" text-anchor="middle">3</text>
+  <text x="370" y="313" fill="#E8EDF5" font-size="14" font-weight="600">Train the language head</text>
+  <text x="340" y="340" fill="#8A99B3" font-size="11.5" font-family="ui-monospace, Consolas, monospace">train_lm.py</text>
+  <text x="340" y="364" fill="#8A99B3" font-size="11.5">KenLM n-gram over transcripts</text>
+  <text x="340" y="381" fill="#8A99B3" font-size="11.5">+ any text-only corpus</text>
+  <text x="340" y="398" fill="#8A99B3" font-size="11.5">no audio required</text>
+  <text x="340" y="418" fill="#5BC98D" font-size="11">→ lm_5gram.bin</text>
+
+  <path d="M548,353 L935,353 L935,236" stroke="#F5A524" stroke-width="1.6" stroke-dasharray="5 4" fill="none" marker-end="url(#a7a)"/>
+  <text x="566" y="344" fill="#5D6B85" font-size="11">used at decode time only — never a training input</text>
+
+  <!-- footnote strip -->
+  <rect x="50" y="458" width="960" height="52" rx="10" fill="#131A26" stroke="#26314A"/>
+  <text x="70" y="480" fill="#E8EDF5" font-size="12" font-weight="600">Stage 3 is the cheap one.</text>
+  <text x="242" y="480" fill="#8A99B3" font-size="12">Re-running it against a new corpus gives you a domain-adapted system in minutes, on a laptop,</text>
+  <text x="70" y="499" fill="#8A99B3" font-size="12">without collecting a single new recording — stages 1, 2 and 4 stay exactly as they were.</text>
+</svg>

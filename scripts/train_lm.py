@@ -1,94 +1,64 @@
 """
-Train a KenLM n-gram language model for CTC beam search decoding.
+Train an n-gram language head for CTC beam-search decoding.
 
-Supports:
-  1. Arabic transcripts from pretraining data
-  2. Egyptian Arabic corpus (1.9M sentences from Prickly-Labs)
-  3. Code-switching transcripts
-  4. Extra text files
+Two backends:
 
-Usage:
+  kenlm   — shells out to `lmplz` + `build_binary`. Fastest, produces a compact
+            binary, and is what you want in production. Needs a C++ toolchain.
+  python  — pure-Python interpolated Witten-Bell (metro_asr.lm). No compiler,
+            no Boost, no Eigen; writes a standard ARPA that KenLM and
+            pyctcdecode load identically. Slower and larger, but it always works.
+
+`--backend auto` (the default) uses kenlm when `lmplz` is on PATH and falls
+back to python otherwise.
+
+Train from a corpus file you already have:
+
+    python scripts/train_lm.py --corpus corpora/technical.txt \
+                               --out lm/technical_4gram.arpa --order 4
+
+Or let it assemble the general-purpose corpus from HuggingFace, using the
+configuration block below:
+
     python scripts/train_lm.py
 """
+
+import argparse
 import os
-import sys
-import subprocess
 import shutil
+import subprocess
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from metro_asr.utils import enable_utf8_stdout
+
+enable_utf8_stdout()
+
 # ========================= CONFIGURATION =========================
-ORDER = 5                          # 5-gram for better English phrase modeling
-OUTPUT_DIR = "lm_v2"
-DATA_DIR = "data_prepared/train"    # Prepared Arabic transcripts
+# Used only when --corpus is not supplied.
+ORDER = 5
+OUTPUT_DIR = "lm"
+DATA_DIR = "data_prepared/train"
 MAX_SAMPLES = 500000
 
-EGYPTIAN_CORPUS = "Prickly-Labs/1.9M-Egyptian-Corpus"  # HF dataset name or None
+EGYPTIAN_CORPUS = "Prickly-Labs/1.9M-Egyptian-Corpus"
 EGYPTIAN_TEXT_COL = "text"
 MAX_EGYPTIAN_SAMPLES = 500000
 
-CS_DATASET = "MohamedRashad/arabic-english-code-switching"  # HF dataset or local file, or None
+CS_DATASET = "MohamedRashad/arabic-english-code-switching"
 CS_TEXT_COL = "sentence"
-CS_UPSAMPLE = 20                    # Repeat CS data N times (12k * 20 = 240k, balances vs 750k Arabic)
+CS_UPSAMPLE = 20
 
-ENGLISH_DATASET = "librispeech_asr" # Use LibriSpeech transcripts instead of ag_news
-MAX_ENGLISH_SAMPLES = 200000        # More English for better CS decoding
+ENGLISH_DATASET = "librispeech_asr"
+MAX_ENGLISH_SAMPLES = 200000
 
-EXTRA_TEXT_FILE = None              # Path to additional text file (one per line)
+EXTRA_TEXT_FILE = None
 CACHE_DIR = "data_cache"
 # =================================================================
 
 
-def ensure_kenlm_binaries():
-    lmplz = shutil.which("lmplz")
-    if lmplz:
-        return os.path.dirname(lmplz)
-
-    kenlm_build = os.path.join(os.path.dirname(__file__), "..", "kenlm_build")
-    lmplz_local = os.path.join(kenlm_build, "bin", "lmplz")
-
-    if os.path.exists(lmplz_local):
-        return os.path.join(kenlm_build, "bin")
-
-    print("KenLM binaries not found. Building from source...")
-    os.makedirs(kenlm_build, exist_ok=True)
-
-    src_dir = os.path.join(kenlm_build, "src")
-    if not os.path.exists(src_dir):
-        subprocess.run(
-            ["git", "clone", "https://github.com/kpu/kenlm.git", src_dir],
-            check=True,
-        )
-    build_dir = os.path.join(src_dir, "build")
-    os.makedirs(build_dir, exist_ok=True)
-    subprocess.run(["cmake", ".."], cwd=build_dir, check=True)
-    subprocess.run(["make", "-j4"], cwd=build_dir, check=True)
-
-    bin_dir = os.path.join(kenlm_build, "bin")
-    os.makedirs(bin_dir, exist_ok=True)
-    for binary in ["lmplz", "build_binary"]:
-        src = os.path.join(build_dir, "bin", binary)
-        dst = os.path.join(bin_dir, binary)
-        if os.path.exists(src):
-            shutil.copy2(src, dst)
-
-    return bin_dir
-
-
-def find_system_libstdcpp():
-    """Find a libstdc++ that has the GLIBCXX symbols the compiled binary needs."""
-    candidates = [
-        "/usr/lib/x86_64-linux-gnu",
-        "/usr/lib64",
-        "/usr/local/lib64",
-    ]
-    import glob
-    for d in candidates:
-        libs = glob.glob(os.path.join(d, "libstdc++.so.6*"))
-        if libs:
-            return d
-    return None
-
+# ───────────────────────────── corpus assembly ──────────────────────────────
 
 def load_egyptian_corpus():
     if not EGYPTIAN_CORPUS:
@@ -113,147 +83,174 @@ def load_cs_texts():
     if not CS_DATASET:
         return []
     if os.path.isfile(CS_DATASET):
-        texts = []
-        with open(CS_DATASET, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    texts.append(line.lower())
+        with open(CS_DATASET, encoding="utf-8") as f:
+            texts = [l.strip().lower() for l in f if l.strip()]
         print(f"  CS texts (file): {len(texts)}")
         return texts
 
     from datasets import load_dataset
     print(f"Loading CS dataset: {CS_DATASET}...")
     ds = load_dataset(CS_DATASET, split="train", cache_dir=CACHE_DIR)
-    text_col = CS_TEXT_COL if CS_TEXT_COL in ds.column_names else "text"
-    ds = ds.select_columns([text_col])
-    texts = []
-    for item in ds:
-        t = item.get(text_col, "")
-        if t and len(t.strip()) >= 2:
-            texts.append(t.lower().strip())
+    col = CS_TEXT_COL if CS_TEXT_COL in ds.column_names else "text"
+    ds = ds.select_columns([col])
+    texts = [i[col].lower().strip() for i in ds if i.get(col) and len(i[col].strip()) >= 2]
     print(f"  CS transcripts: {len(texts)}")
     return texts
 
 
-def main():
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-    # 1. Arabic transcripts from pretraining
-    print(f"Loading Arabic transcripts from {DATA_DIR}...")
-    from datasets import load_from_disk
-    dataset = load_from_disk(DATA_DIR)
-    all_texts = dataset.remove_columns(["audio"])["text"]
-
+def load_english_texts():
+    if not ENGLISH_DATASET:
+        return []
+    from datasets import load_dataset
     texts = []
-    for t in all_texts:
+    if ENGLISH_DATASET == "librispeech_asr":
+        print("Loading English from LibriSpeech transcripts...")
+        for split in ["train.clean.100", "train.clean.360", "train.other.500"]:
+            try:
+                ds = load_dataset("librispeech_asr",
+                                  "clean" if "clean" in split else "other",
+                                  split=split, cache_dir=CACHE_DIR, trust_remote_code=True)
+                for item in ds:
+                    t = item["text"].strip()
+                    if t and len(t) >= 5:
+                        texts.append(t.lower())
+                    if len(texts) >= MAX_ENGLISH_SAMPLES:
+                        break
+                print(f"  LibriSpeech {split}: total so far {len(texts)}")
+            except Exception as e:
+                print(f"  Could not load {split}: {e}")
+            if len(texts) >= MAX_ENGLISH_SAMPLES:
+                break
+    else:
+        ds = load_dataset(ENGLISH_DATASET, split="train", cache_dir=CACHE_DIR)
+        for item in ds:
+            t = item["text"].strip()
+            if t and len(t) >= 10:
+                texts.append(t.lower())
+            if len(texts) >= MAX_ENGLISH_SAMPLES:
+                break
+    print(f"  English sentences: {len(texts)}")
+    return texts
+
+
+def assemble_default_corpus():
+    from datasets import load_from_disk
+    print(f"Loading Arabic transcripts from {DATA_DIR}...")
+    dataset = load_from_disk(DATA_DIR)
+    texts = []
+    for t in dataset.remove_columns(["audio"])["text"]:
         if t and len(t.strip()) >= 2:
             texts.append(t.lower().strip())
         if len(texts) >= MAX_SAMPLES:
             break
     print(f"  Arabic transcripts: {len(texts)}")
 
-    # 2. Egyptian corpus
-    egyptian_texts = load_egyptian_corpus()
-    texts.extend(egyptian_texts)
+    texts += load_egyptian_corpus()
 
-    # 3. Code-switching transcripts (upsampled for balance)
-    cs_texts = load_cs_texts()
-    if cs_texts and CS_UPSAMPLE > 1:
-        cs_upsampled = cs_texts * CS_UPSAMPLE
-        print(f"  CS upsampled: {len(cs_texts)} x {CS_UPSAMPLE} = {len(cs_upsampled)}")
-        texts.extend(cs_upsampled)
+    cs = load_cs_texts()
+    if cs and CS_UPSAMPLE > 1:
+        print(f"  CS upsampled: {len(cs)} x {CS_UPSAMPLE} = {len(cs) * CS_UPSAMPLE}")
+        texts += cs * CS_UPSAMPLE
     else:
-        texts.extend(cs_texts)
+        texts += cs
 
-    # 4. English text (so LM knows English n-grams for code-switching)
-    if ENGLISH_DATASET:
-        from datasets import load_dataset
-        english_texts = []
+    texts += load_english_texts()
 
-        if ENGLISH_DATASET == "librispeech_asr":
-            print("Loading English from LibriSpeech transcripts...")
-            for split in ["train.clean.100", "train.clean.360", "train.other.500"]:
-                try:
-                    ds = load_dataset("librispeech_asr",
-                                      "clean" if "clean" in split else "other",
-                                      split=split, cache_dir=CACHE_DIR, trust_remote_code=True)
-                    for item in ds:
-                        t = item["text"].strip()
-                        if t and len(t) >= 5:
-                            english_texts.append(t.lower())
-                        if len(english_texts) >= MAX_ENGLISH_SAMPLES:
-                            break
-                    print(f"  LibriSpeech {split}: total so far {len(english_texts)}")
-                except Exception as e:
-                    print(f"  ⚠️ Could not load {split}: {e}")
-                if len(english_texts) >= MAX_ENGLISH_SAMPLES:
-                    break
-        else:
-            print(f"Loading English text: {ENGLISH_DATASET}...")
-            ds = load_dataset(ENGLISH_DATASET, split="train", cache_dir=CACHE_DIR)
-            for item in ds:
-                t = item["text"].strip()
-                if t and len(t) >= 10:
-                    english_texts.append(t.lower())
-                if len(english_texts) >= MAX_ENGLISH_SAMPLES:
-                    break
-
-        print(f"  English sentences: {len(english_texts)}")
-        texts.extend(english_texts)
-
-    # 5. Extra text file
     if EXTRA_TEXT_FILE and os.path.exists(EXTRA_TEXT_FILE):
         print(f"Loading extra text from {EXTRA_TEXT_FILE}...")
-        with open(EXTRA_TEXT_FILE, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip().lower()
-                if line and len(line) >= 2:
-                    texts.append(line)
+        with open(EXTRA_TEXT_FILE, encoding="utf-8") as f:
+            texts += [l.strip().lower() for l in f if len(l.strip()) >= 2]
 
-    print(f"\nTotal LM corpus: {len(texts)} sentences")
-    print(f"Training {ORDER}-gram LM...")
+    return texts
 
-    text_file = os.path.join(OUTPUT_DIR, "corpus.txt")
-    with open(text_file, "w", encoding="utf-8") as f:
-        for t in texts:
-            f.write(t + "\n")
 
-    bin_dir = ensure_kenlm_binaries()
-    lmplz = os.path.join(bin_dir, "lmplz")
-    build_binary = os.path.join(bin_dir, "build_binary")
+# ───────────────────────────── kenlm backend ────────────────────────────────
 
-    arpa_file = os.path.join(OUTPUT_DIR, f"lm_{ORDER}gram.arpa")
-    binary_file = os.path.join(OUTPUT_DIR, f"lm_{ORDER}gram.bin")
+def kenlm_available():
+    return shutil.which("lmplz") is not None
 
-    env = os.environ.copy()
-    lib_dir = find_system_libstdcpp()
-    if lib_dir:
-        env["LD_LIBRARY_PATH"] = lib_dir + ":" + env.get("LD_LIBRARY_PATH", "")
 
-    print(f"Running lmplz (order={ORDER})...")
-    with open(text_file, "r") as inp, open(arpa_file, "w") as out:
-        subprocess.run(
-            [lmplz, "-o", str(ORDER), "--discount_fallback"],
-            stdin=inp, stdout=out, check=True, env=env,
-        )
+def train_kenlm(corpus_path, arpa_path, order):
+    lmplz = shutil.which("lmplz")
+    build_binary = shutil.which("build_binary")
 
-    print(f"Converting to binary format...")
-    subprocess.run(
-        [build_binary, arpa_file, binary_file],
-        check=True, env=env,
-    )
+    print(f"Running lmplz (order={order})...")
+    with open(corpus_path, encoding="utf-8") as inp, open(arpa_path, "w", encoding="utf-8") as out:
+        subprocess.run([lmplz, "-o", str(order), "--discount_fallback"],
+                       stdin=inp, stdout=out, check=True)
 
-    arpa_size = os.path.getsize(arpa_file) / 1024 / 1024
-    binary_size = os.path.getsize(binary_file) / 1024 / 1024
-    print(f"\nLanguage model trained:")
-    print(f"  ARPA:   {arpa_file} ({arpa_size:.1f} MB)")
-    print(f"  Binary: {binary_file} ({binary_size:.1f} MB)")
-    print(f"  Corpus: {len(texts)} sentences")
-    print(f"  Order:  {ORDER}-gram")
+    if build_binary:
+        binary_path = os.path.splitext(arpa_path)[0] + ".bin"
+        print("Converting to binary format...")
+        subprocess.run([build_binary, arpa_path, binary_path], check=True)
+        return binary_path
+    return arpa_path
 
-    print(f"\nTo use with beam search decoder:")
-    print(f"  Set LM_PATH = \"{binary_file}\" in scripts/inference.py")
+
+# ───────────────────────────────── main ─────────────────────────────────────
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--corpus", help="text file, one sentence per line (skips dataset assembly)")
+    ap.add_argument("--out", help="output path (.arpa)")
+    ap.add_argument("--order", type=int, default=ORDER)
+    ap.add_argument("--backend", choices=["auto", "kenlm", "python"], default="auto")
+    ap.add_argument("--min-count", type=int, default=1,
+                    help="prune n-grams of order >= 2 seen fewer than this many times")
+    args = ap.parse_args()
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    arpa_path = args.out or os.path.join(OUTPUT_DIR, f"lm_{args.order}gram.arpa")
+    os.makedirs(os.path.dirname(arpa_path) or ".", exist_ok=True)
+
+    # ---- corpus ----
+    if args.corpus:
+        corpus_path = args.corpus
+        n_lines = sum(1 for _ in open(corpus_path, encoding="utf-8"))
+        print(f"Using corpus: {corpus_path} ({n_lines:,} lines)")
+    else:
+        texts = assemble_default_corpus()
+        corpus_path = os.path.join(OUTPUT_DIR, "corpus.txt")
+        with open(corpus_path, "w", encoding="utf-8", newline="\n") as f:
+            for t in texts:
+                f.write(t + "\n")
+        n_lines = len(texts)
+        print(f"\nTotal LM corpus: {n_lines:,} sentences -> {corpus_path}")
+
+    # ---- backend ----
+    backend = args.backend
+    if backend == "auto":
+        backend = "kenlm" if kenlm_available() else "python"
+        print(f"Backend: {backend} (auto-selected)")
+    if backend == "kenlm" and not kenlm_available():
+        print("lmplz not found on PATH — falling back to the pure-Python backend.")
+        backend = "python"
+
+    # ---- train ----
+    if backend == "kenlm":
+        final = train_kenlm(corpus_path, arpa_path, args.order)
+    else:
+        from metro_asr.lm import build_arpa
+
+        def sentences():
+            with open(corpus_path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        yield line
+
+        stats = build_arpa(sentences(), arpa_path, order=args.order,
+                           min_count=args.min_count, progress=lambda m: print("  " + m))
+        print(f"  n-grams: {stats['ngrams']}")
+        final = arpa_path
+
+    size_mb = os.path.getsize(final) / 1e6
+    print(f"\nLanguage head trained:")
+    print(f"  Path:   {final} ({size_mb:.1f} MB)")
+    print(f"  Order:  {args.order}-gram")
+    print(f"  Corpus: {n_lines:,} sentences")
+    print(f"\nUse it with:")
+    print(f'  engine = MetroASREngine.from_pretrained("checkpoints", lm_path="{final}")')
 
 
 if __name__ == "__main__":

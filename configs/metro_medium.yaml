@@ -19,7 +19,7 @@ audio:
 
 tokenizer:
   type: "bpe"
-  vocab_size: 2000
+  vocab_size: 8000
 
 training:
   batch_size: 16
@@ -56,7 +56,7 @@ training:
   resume_from: null
 
   wandb_project: "metro-asr"
-  wandb_run_name: "Metro-Medium-BPE2000"
+  wandb_run_name: "metro-medium"
 
 data:
   datasets:

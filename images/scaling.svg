@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 580" width="1060" height="580"
+     font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg5" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B0F17"/>
+      <stop offset="100%" stop-color="#0E1420"/>
+    </linearGradient>
+    <linearGradient id="acc5" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#E8232A"/>
+      <stop offset="100%" stop-color="#FF5A60"/>
+    </linearGradient>
+    <linearGradient id="bS" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#8E1015"/><stop offset="100%" stop-color="#FF5A60"/>
+    </linearGradient>
+    <linearGradient id="bM" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#7A4A10"/><stop offset="100%" stop-color="#F5A524"/>
+    </linearGradient>
+    <linearGradient id="bL" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1F4A6B"/><stop offset="100%" stop-color="#48A8E0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1060" height="580" fill="url(#bg5)"/>
+
+  <rect x="50" y="30" width="4" height="22" rx="2" fill="url(#acc5)"/>
+  <text x="68" y="48" fill="#E8EDF5" font-size="20" font-weight="700">Scaling the family</text>
+  <text x="68" y="70" fill="#8A99B3" font-size="12.5">Same block, same recipe — width, depth and vocabulary grow together. Parameter counts are exact, from the shipped configs.</text>
+
+  <!-- ============ parameter bars ============ -->
+  <text x="68" y="112" fill="#5D6B85" font-size="11" font-weight="700" letter-spacing="1.5">TOTAL PARAMETERS</text>
+
+  <!-- scale: 748M over 700px -> 1M = 0.9358px -->
+  <text x="68" y="150" fill="#E8EDF5" font-size="13.5" font-weight="600">Small</text>
+  <rect x="150" y="136" width="58" height="22" rx="5" fill="url(#bS)"/>
+  <text x="220" y="152" fill="#FF8A8F" font-size="12.5" font-weight="600">61.6 M</text>
+  <text x="300" y="152" fill="#5BC98D" font-size="11.5">✓ released</text>
+
+  <text x="68" y="196" fill="#E8EDF5" font-size="13.5" font-weight="600">Medium</text>
+  <rect x="150" y="182" width="232" height="22" rx="5" fill="url(#bM)"/>
+  <text x="394" y="198" fill="#F5A524" font-size="12.5" font-weight="600">247.4 M</text>
+  <text x="480" y="198" fill="#5D6B85" font-size="11.5">config only — no checkpoint</text>
+
+  <text x="68" y="242" fill="#E8EDF5" font-size="13.5" font-weight="600">Large</text>
+  <rect x="150" y="228" width="700" height="22" rx="5" fill="url(#bL)"/>
+  <text x="862" y="244" fill="#48A8E0" font-size="12.5" font-weight="600">747.8 M</text>
+
+  <!-- ============ spec table ============ -->
+  <text x="68" y="300" fill="#5D6B85" font-size="11" font-weight="700" letter-spacing="1.5">CONFIGURATION</text>
+
+  <line x1="68" y1="312" x2="1000" y2="312" stroke="#26314A"/>
+  <text x="80"  y="334" fill="#5D6B85" font-size="11.5">variant</text>
+  <text x="240" y="334" fill="#5D6B85" font-size="11.5">d_model</text>
+  <text x="350" y="334" fill="#5D6B85" font-size="11.5">layers</text>
+  <text x="450" y="334" fill="#5D6B85" font-size="11.5">heads</text>
+  <text x="550" y="334" fill="#5D6B85" font-size="11.5">FFN mult</text>
+  <text x="670" y="334" fill="#5D6B85" font-size="11.5">BPE vocab</text>
+  <text x="800" y="334" fill="#5D6B85" font-size="11.5">aux CTC at</text>
+  <text x="930" y="334" fill="#5D6B85" font-size="11.5">fp32 size</text>
+  <line x1="68" y1="344" x2="1000" y2="344" stroke="#26314A"/>
+
+  <rect x="68" y="348" width="932" height="34" fill="#111825"/>
+  <rect x="68" y="348" width="3" height="34" fill="#FF5A60"/>
+  <text x="80"  y="370" fill="#E8EDF5" font-size="12.5" font-weight="600">Small</text>
+  <text x="240" y="370" fill="#C7D2E4" font-size="12.5">384</text>
+  <text x="350" y="370" fill="#C7D2E4" font-size="12.5">12</text>
+  <text x="450" y="370" fill="#C7D2E4" font-size="12.5">6</text>
+  <text x="550" y="370" fill="#C7D2E4" font-size="12.5">3×</text>
+  <text x="670" y="370" fill="#C7D2E4" font-size="12.5">5 000</text>
+  <text x="800" y="370" fill="#C7D2E4" font-size="12.5">layer 6</text>
+  <text x="930" y="370" fill="#C7D2E4" font-size="12.5">235 MB</text>
+
+  <rect x="68" y="386" width="932" height="34" fill="#0E1420"/>
+  <rect x="68" y="386" width="3" height="34" fill="#F5A524"/>
+  <text x="80"  y="408" fill="#E8EDF5" font-size="12.5" font-weight="600">Medium</text>
+  <text x="240" y="408" fill="#C7D2E4" font-size="12.5">512</text>
+  <text x="350" y="408" fill="#C7D2E4" font-size="12.5">24</text>
+  <text x="450" y="408" fill="#C7D2E4" font-size="12.5">8</text>
+  <text x="550" y="408" fill="#C7D2E4" font-size="12.5">4×</text>
+  <text x="670" y="408" fill="#C7D2E4" font-size="12.5">8 000</text>
+  <text x="800" y="408" fill="#C7D2E4" font-size="12.5">layers 8, 16</text>
+  <text x="930" y="408" fill="#C7D2E4" font-size="12.5">944 MB</text>
+
+  <rect x="68" y="424" width="932" height="34" fill="#111825"/>
+  <rect x="68" y="424" width="3" height="34" fill="#48A8E0"/>
+  <text x="80"  y="446" fill="#E8EDF5" font-size="12.5" font-weight="600">Large</text>
+  <text x="240" y="446" fill="#C7D2E4" font-size="12.5">768</text>
+  <text x="350" y="446" fill="#C7D2E4" font-size="12.5">32</text>
+  <text x="450" y="446" fill="#C7D2E4" font-size="12.5">12</text>
+  <text x="550" y="446" fill="#C7D2E4" font-size="12.5">4×</text>
+  <text x="670" y="446" fill="#C7D2E4" font-size="12.5">16 000</text>
+  <text x="800" y="446" fill="#C7D2E4" font-size="12.5">layers 8, 16, 24</text>
+  <text x="930" y="446" fill="#C7D2E4" font-size="12.5">2.85 GB</text>
+  <line x1="68" y1="458" x2="1000" y2="458" stroke="#26314A"/>
+
+  <!-- ============ where the params live ============ -->
+  <text x="68" y="500" fill="#5D6B85" font-size="11" font-weight="700" letter-spacing="1.5">WHERE METRO-SMALL&#8217;S 61.6 M PARAMETERS LIVE</text>
+
+  <!-- 932px total; enc 53.46M=86.8%, sub 4.28M=7.0%, head 1.925M=3.1%, aux 1.925M=3.1% -->
+  <rect x="68"    y="512" width="809" height="26" rx="4" fill="url(#bS)"/>
+  <rect x="879"   y="512" width="65"  height="26" fill="#3A4A6B"/>
+  <rect x="946"   y="512" width="27"  height="26" fill="#2C5C43"/>
+  <rect x="975"   y="512" width="25"  height="26" rx="4" fill="#5C3D14"/>
+
+  <text x="80"  y="530" fill="#FFFFFF" font-size="12" font-weight="600">12 × Metro block — 53.5 M (86.8 %)</text>
+  <text x="68"  y="558" fill="#8A99B3" font-size="11.5">
+    <tspan fill="#3A4A6B">■</tspan> subsampling 4.3 M
+    <tspan fill="#2C5C43">  ■</tspan> CTC head 1.9 M
+    <tspan fill="#5C3D14">  ■</tspan> auxiliary CTC head 1.9 M — training only, unused at inference
+  </text>
+</svg>

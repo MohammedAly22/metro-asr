@@ -4,12 +4,16 @@ import random
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from metro_asr.utils import enable_utf8_stdout
+
+enable_utf8_stdout()
+
 from metro_asr.data.dataset import load_hf_datasets, normalize_arabic_text
 from metro_asr.utils.config import load_config
 from metro_asr.utils.logger import get_logger, print_banner
 
 # ─── Configuration ───────────────────────────────────────────────────────────
-CONFIG_PATH = "configs/metro_tiny.yaml"
+CONFIG_PATH = "configs/metro_small.yaml"  # only `data` and `audio` sections are used
 OUTPUT_DIR = "data_prepared"
 
 # Test split: small curated set with guaranteed Arabic + CS samples for WER eval

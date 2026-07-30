@@ -2,24 +2,27 @@ import os
 import sys
 import time
 import torch
-import torchaudio
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from metro_asr.utils import enable_utf8_stdout
+
+enable_utf8_stdout()
 
 from metro_asr.utils.config import load_config
 from metro_asr.utils.logger import get_logger, print_banner
 from metro_asr.model.metro import MetroASR
 from metro_asr.model.tokenizer import build_tokenizer
-from metro_asr.data.features import LogMelFeatureExtractor, resample_audio
+from metro_asr.data.features import LogMelFeatureExtractor, resample_audio, load_audio_file
 
 # ========================= CONFIGURATION =========================
-AUDIO_PATH = "test_samples/test_1.wav"
-CONFIG_PATH = "configs/metro_small.yaml"
-CHECKPOINT_PATH = "checkpoints/metro-small-v2/best_model.pt"
-TOKENIZER_DIR = "tokenizer_bpe5k_v2"
+AUDIO_PATH = "test_samples/5.wav"
+CONFIG_PATH = "checkpoints/config.yaml"
+CHECKPOINT_PATH = "checkpoints/model.pt"
+TOKENIZER_DIR = "checkpoints"
 DEVICE = "cpu"  # "auto", "cpu", or "cuda"
 
-LM_PATH = "lm_v2/lm_5gram.bin"  # Path to KenLM .arpa or .bin file (None = greedy only)
+LM_PATH = "checkpoints/lm_5gram.bin"  # KenLM .arpa or .bin file (None = greedy only)
 BEAM_WIDTH = 200
 LM_ALPHA = 0.5   # LM weight — keep moderate so LM doesn't kill English words
 LM_BETA = 3.0    # Word insertion bonus — high to prevent word deletion
@@ -33,8 +36,7 @@ TUNE_REFERENCE = ""  # Ground truth text for WER calculation (optional)
 
 
 def run_single_inference(model, tokenizer, feature_extractor, beam_decoder, audio_path, device, logger):
-    waveform, sr = torchaudio.load(audio_path)
-    waveform = waveform.mean(dim=0)
+    waveform, sr = load_audio_file(audio_path)
     duration = waveform.shape[0] / sr
 
     if sr != feature_extractor.sample_rate:

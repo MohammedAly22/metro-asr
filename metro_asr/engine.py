@@ -2,7 +2,9 @@
 Metro-ASR Inference Engine.
 
 Provides the public API for end users:
-    - MetroASR.from_pretrained("MohammedAly22/metro-asr-small")
+    - MetroASREngine.from_pretrained("small")                  # HF alias
+    - MetroASREngine.from_pretrained("MohammedAly22/metro-asr-small")
+    - MetroASREngine.from_pretrained("checkpoints")            # local directory
     - engine.transcribe("audio.wav")
     - engine.transcribe_batch(["a.wav", "b.wav"])
     - engine.transcribe_stream(audio_chunk_generator)
@@ -10,8 +12,7 @@ Provides the public API for end users:
 
 import os
 import time
-import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional, Union, Iterator, Generator
 
 import torch
@@ -22,38 +23,35 @@ from metro_asr.utils.config import load_config
 from metro_asr.model.metro import MetroASR as MetroASRModel
 from metro_asr.model.tokenizer import build_tokenizer
 from metro_asr.model.decoder import CTCBeamSearchDecoder
-from metro_asr.data.features import LogMelFeatureExtractor, resample_audio
+from metro_asr.data.features import (
+    LogMelFeatureExtractor,
+    resample_audio,
+    load_audio_file as _read_audio_file,
+)
 
 
 HF_MODEL_REGISTRY = {
-    "tiny": "MohammedAly22/metro-asr-tiny",
     "small": "MohammedAly22/metro-asr-small",
     "medium": "MohammedAly22/metro-asr-medium",
     "large": "MohammedAly22/metro-asr-large",
 }
 
-LOCAL_MODEL_REGISTRY = {
-    "tiny": {
-        "config": "configs/metro_tiny.yaml",
-        "checkpoint": "checkpoints/metro-tiny/best_model.pt",
-        "tokenizer_dir": "tokenizer_final",
-    },
-    "small": {
-        "config": "configs/metro_small.yaml",
-        "checkpoint": "checkpoints/metro-small-v2/best_model.pt",
-        "tokenizer_dir": "tokenizer_bpe5k_v2",
-    },
-    "medium": {
-        "config": "configs/metro_medium.yaml",
-        "checkpoint": "checkpoints/metro-medium/best_model.pt",
-        "tokenizer_dir": "tokenizer_bpe2000",
-    },
-    "large": {
-        "config": "configs/metro_large.yaml",
-        "checkpoint": "checkpoints/metro-large/best_model.pt",
-        "tokenizer_dir": "tokenizer_bpe4000",
-    },
-}
+# Filenames looked up inside a model directory (local dir or downloaded snapshot).
+CONFIG_FILENAMES = ("config.yaml", "config.yml")
+CHECKPOINT_FILENAMES = ("model.pt", "best_model.pt", "final_model.pt")
+LM_FILENAMES = ("lm_5gram.bin", "lm_4gram.bin", "lm.bin")
+
+# Weights + config + tokenizer. The KenLM binary is multiple GB and is only
+# fetched when the caller actually asks for it.
+CORE_PATTERNS = ["config.yaml", "model.pt", "bpe.model", "bpe.vocab"]
+
+
+def _first_existing(directory: str, filenames) -> Optional[str]:
+    for name in filenames:
+        candidate = os.path.join(directory, name)
+        if os.path.exists(candidate):
+            return candidate
+    return None
 
 
 @dataclass
@@ -83,11 +81,15 @@ class MetroASREngine:
         engine = MetroASREngine.from_pretrained("small")
         engine = MetroASREngine.from_pretrained("MohammedAly22/metro-asr-small")
 
-        # From local files
+        # From a directory you downloaded yourself — no network access
+        engine = MetroASREngine.from_pretrained("checkpoints")
+        engine = MetroASREngine.from_pretrained("checkpoints", lm_path="auto")
+
+        # From individually placed files
         engine = MetroASREngine.from_local(
             config_path="configs/metro_small.yaml",
-            checkpoint_path="checkpoints/metro-small-v2/best_model.pt",
-            tokenizer_dir="tokenizer_bpe5k_v2",
+            checkpoint_path="checkpoints/model.pt",
+            tokenizer_dir="checkpoints",
         )
 
         # Transcribe
@@ -143,29 +145,45 @@ class MetroASREngine:
         beam_width: int = 100,
         lm_alpha: float = 0.5,
         lm_beta: float = 5.0,
+        cache_dir: Optional[str] = None,
+        revision: Optional[str] = None,
     ) -> "MetroASREngine":
-        if device is None:
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-        device = torch.device(device)
+        """
+        Load a model, resolved in this order:
 
-        if model_name_or_path in HF_MODEL_REGISTRY:
-            model_name_or_path = HF_MODEL_REGISTRY[model_name_or_path]
+          1. A local directory holding ``config.yaml`` + ``model.pt`` + ``bpe.model``
+             (e.g. the output of ``snapshot_download(...)``). Nothing is downloaded.
+          2. A size alias — ``"small"``, ``"medium"``, ``"large"``.
+          3. A HuggingFace repo id — ``"MohammedAly22/metro-asr-small"``.
 
-        if model_name_or_path in LOCAL_MODEL_REGISTRY:
-            info = LOCAL_MODEL_REGISTRY[model_name_or_path]
-            return cls.from_local(
-                config_path=info["config"],
-                checkpoint_path=info["checkpoint"],
-                tokenizer_dir=info["tokenizer_dir"],
-                device=str(device),
+        Pass ``lm_path="auto"`` to pick up a KenLM binary sitting next to the
+        checkpoint (``lm_5gram.bin``); it is never downloaded implicitly.
+        """
+        if os.path.isdir(model_name_or_path):
+            return cls.from_directory(
+                model_name_or_path,
+                device=device,
                 lm_path=lm_path,
                 beam_width=beam_width,
                 lm_alpha=lm_alpha,
                 lm_beta=lm_beta,
             )
 
-        return cls._from_huggingface(
-            model_name_or_path,
+        repo_id = HF_MODEL_REGISTRY.get(model_name_or_path, model_name_or_path)
+
+        if "/" not in repo_id:
+            raise ValueError(
+                f"'{model_name_or_path}' is neither an existing directory, a known size "
+                f"({', '.join(HF_MODEL_REGISTRY)}), nor a HuggingFace repo id of the form "
+                "'owner/name'. To load a downloaded checkpoint, pass the path to the "
+                "directory that contains config.yaml and model.pt."
+            )
+
+        model_dir = cls._download_snapshot(
+            repo_id, cache_dir=cache_dir, revision=revision, with_lm=(lm_path == "auto")
+        )
+        return cls.from_directory(
+            model_dir,
             device=device,
             lm_path=lm_path,
             beam_width=beam_width,
@@ -174,66 +192,67 @@ class MetroASREngine:
         )
 
     @classmethod
-    def _from_huggingface(
+    def from_directory(
         cls,
-        repo_id: str,
-        device: torch.device,
+        model_dir: str,
+        device: Optional[str] = None,
         lm_path: Optional[str] = None,
         beam_width: int = 100,
         lm_alpha: float = 0.5,
         lm_beta: float = 5.0,
     ) -> "MetroASREngine":
+        """Load from a directory laid out like a released Metro-ASR checkpoint."""
+        config_path = _first_existing(model_dir, CONFIG_FILENAMES)
+        if config_path is None:
+            raise FileNotFoundError(
+                f"No model config in '{model_dir}' (looked for {', '.join(CONFIG_FILENAMES)}). "
+                "Is this the directory you downloaded the checkpoint into?"
+            )
+
+        checkpoint_path = _first_existing(model_dir, CHECKPOINT_FILENAMES)
+        if checkpoint_path is None:
+            raise FileNotFoundError(
+                f"No model weights in '{model_dir}' (looked for {', '.join(CHECKPOINT_FILENAMES)})."
+            )
+
+        return cls.from_local(
+            config_path=config_path,
+            checkpoint_path=checkpoint_path,
+            tokenizer_dir=model_dir,
+            device=device,
+            lm_path=lm_path,
+            beam_width=beam_width,
+            lm_alpha=lm_alpha,
+            lm_beta=lm_beta,
+        )
+
+    @staticmethod
+    def _download_snapshot(
+        repo_id: str,
+        cache_dir: Optional[str] = None,
+        revision: Optional[str] = None,
+        with_lm: bool = False,
+    ) -> str:
         try:
-            from huggingface_hub import hf_hub_download, snapshot_download
+            from huggingface_hub import snapshot_download
         except ImportError:
             raise ImportError(
                 "huggingface_hub is required for downloading models. "
                 "Install it with: pip install huggingface_hub"
             )
 
-        cache_dir = os.path.join(
-            os.path.expanduser("~"), ".cache", "metro-asr"
-        )
+        if cache_dir is None:
+            cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "metro-asr")
 
-        config_path = hf_hub_download(
+        patterns = list(CORE_PATTERNS)
+        if with_lm:
+            patterns.append("*.bin")
+
+        return snapshot_download(
             repo_id=repo_id,
-            filename="config.yaml",
+            revision=revision,
             cache_dir=cache_dir,
-        )
-        checkpoint_path = hf_hub_download(
-            repo_id=repo_id,
-            filename="model.pt",
-            cache_dir=cache_dir,
-        )
-
-        tokenizer_dir = os.path.dirname(config_path)
-        try:
-            hf_hub_download(
-                repo_id=repo_id,
-                filename="bpe.model",
-                cache_dir=cache_dir,
-                local_dir=tokenizer_dir,
-            )
-        except Exception:
-            try:
-                hf_hub_download(
-                    repo_id=repo_id,
-                    filename="char_tokenizer.json",
-                    cache_dir=cache_dir,
-                    local_dir=tokenizer_dir,
-                )
-            except Exception:
-                pass
-
-        return cls.from_local(
-            config_path=config_path,
-            checkpoint_path=checkpoint_path,
-            tokenizer_dir=tokenizer_dir,
-            device=str(device),
-            lm_path=lm_path,
-            beam_width=beam_width,
-            lm_alpha=lm_alpha,
-            lm_beta=lm_beta,
+            allow_patterns=patterns,
         )
 
     @classmethod
@@ -251,6 +270,9 @@ class MetroASREngine:
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         device = torch.device(device)
+
+        if lm_path == "auto":
+            lm_path = _first_existing(os.path.dirname(checkpoint_path) or ".", LM_FILENAMES)
 
         config = load_config(config_path)
         tokenizer = build_tokenizer(config, tokenizer_dir)
@@ -282,8 +304,7 @@ class MetroASREngine:
 
     def _load_audio(self, audio_input) -> torch.Tensor:
         if isinstance(audio_input, str):
-            waveform, sr = torchaudio.load(audio_input)
-            waveform = waveform.mean(dim=0)
+            waveform, sr = _read_audio_file(audio_input)
         elif isinstance(audio_input, tuple):
             sr, waveform = audio_input
             if not isinstance(waveform, torch.Tensor):
@@ -534,13 +555,55 @@ class MetroASREngine:
     def param_count(self) -> int:
         return self.model.count_parameters()
 
+    @property
+    def has_lm(self) -> bool:
+        """True when a language head is loaded and `beam_search=True` will use it."""
+        return self._beam_decoder is not None
+
+    @property
+    def lm_path(self) -> Optional[str]:
+        return self._lm_path if self.has_lm else None
+
+    def load_lm(
+        self,
+        lm_path: str,
+        beam_width: Optional[int] = None,
+        lm_alpha: Optional[float] = None,
+        lm_beta: Optional[float] = None,
+    ) -> "MetroASREngine":
+        """
+        Attach (or swap) the n-gram language head at runtime.
+
+        The acoustic model is untouched, so a domain-specific head trained on
+        text alone can be plugged into an already-loaded engine.
+        """
+        if not os.path.exists(lm_path):
+            raise FileNotFoundError(f"Language model not found: {lm_path}")
+
+        self._lm_path = lm_path
+        if beam_width is not None:
+            self._beam_width = beam_width
+        if lm_alpha is not None:
+            self._lm_alpha = lm_alpha
+        if lm_beta is not None:
+            self._lm_beta = lm_beta
+
+        self._beam_decoder = CTCBeamSearchDecoder(
+            self.tokenizer,
+            lm_path=self._lm_path,
+            beam_width=self._beam_width,
+            alpha=self._lm_alpha,
+            beta=self._lm_beta,
+        )
+        return self
+
     def __repr__(self):
         return (
             f"MetroASREngine(\n"
             f"  params={self.param_count:,},\n"
             f"  device={self.device},\n"
             f"  sample_rate={self.sample_rate},\n"
-            f"  lm={'loaded' if self._beam_decoder else 'none'},\n"
+            f"  lm={'loaded' if self.has_lm else 'none'},\n"
             f")"
         )
 

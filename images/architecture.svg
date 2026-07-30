@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 940" width="1000" height="940"
+     font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B0F17"/>
+      <stop offset="100%" stop-color="#0E1420"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#E8232A"/>
+      <stop offset="100%" stop-color="#FF5A60"/>
+    </linearGradient>
+    <linearGradient id="amber" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#F5A524"/>
+      <stop offset="100%" stop-color="#FFC65C"/>
+    </linearGradient>
+    <linearGradient id="encFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1A2333"/>
+      <stop offset="100%" stop-color="#141B29"/>
+    </linearGradient>
+    <marker id="ar" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#4A5878"/>
+    </marker>
+    <marker id="arRed" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#E8232A"/>
+    </marker>
+    <marker id="arAmber" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#F5A524"/>
+    </marker>
+  </defs>
+
+  <rect width="1000" height="940" fill="url(#bg)"/>
+
+  <!-- title -->
+  <rect x="60" y="34" width="4" height="22" rx="2" fill="url(#accent)"/>
+  <text x="78" y="52" fill="#E8EDF5" font-size="21" font-weight="700">Metro-ASR — end-to-end architecture</text>
+  <text x="78" y="74" fill="#8A99B3" font-size="13">Non-autoregressive acoustic core + detachable n-gram language head</text>
+
+  <!-- ============ column labels ============ -->
+  <text x="620" y="52" fill="#5D6B85" font-size="11" font-weight="700" letter-spacing="1.6">TENSOR</text>
+  <text x="800" y="52" fill="#5D6B85" font-size="11" font-weight="700" letter-spacing="1.6">NOTES</text>
+
+  <!-- ============ 1. waveform ============ -->
+  <rect x="70" y="102" width="470" height="60" rx="11" fill="#131A26" stroke="#26314A"/>
+  <rect x="70" y="102" width="4" height="60" rx="2" fill="url(#accent)"/>
+  <text x="94" y="128" fill="#E8EDF5" font-size="15" font-weight="600">Raw waveform</text>
+  <text x="94" y="148" fill="#8A99B3" font-size="12">16 kHz · mono · float32</text>
+  <text x="620" y="128" fill="#FF8A8F" font-size="12.5" font-family="ui-monospace, Consolas, monospace">[T]</text>
+  <text x="800" y="128" fill="#8A99B3" font-size="12">resampled if needed</text>
+
+  <path d="M305,162 L305,190" stroke="#4A5878" stroke-width="1.6" marker-end="url(#ar)"/>
+
+  <!-- ============ 2. log-mel ============ -->
+  <rect x="70" y="196" width="470" height="60" rx="11" fill="#131A26" stroke="#26314A"/>
+  <rect x="70" y="196" width="4" height="60" rx="2" fill="url(#accent)"/>
+  <text x="94" y="222" fill="#E8EDF5" font-size="15" font-weight="600">Log-Mel filterbank</text>
+  <text x="94" y="242" fill="#8A99B3" font-size="12">80 mels · 25 ms window · 10 ms hop · per-utterance norm</text>
+  <text x="620" y="222" fill="#FF8A8F" font-size="12.5" font-family="ui-monospace, Consolas, monospace">[T/160, 80]</text>
+  <text x="800" y="222" fill="#8A99B3" font-size="12">100 frames / second</text>
+
+  <path d="M305,256 L305,284" stroke="#4A5878" stroke-width="1.6" marker-end="url(#ar)"/>
+
+  <!-- ============ 3. subsampling ============ -->
+  <rect x="70" y="290" width="470" height="72" rx="11" fill="#131A26" stroke="#26314A"/>
+  <rect x="70" y="290" width="4" height="72" rx="2" fill="url(#accent)"/>
+  <text x="94" y="316" fill="#E8EDF5" font-size="15" font-weight="600">Conv2D subsampling  ×4</text>
+  <text x="94" y="336" fill="#8A99B3" font-size="12">2 × Conv2d(3×3, stride 2) + SiLU  →  flatten  →  Linear  →  RMSNorm</text>
+  <text x="94" y="354" fill="#5D6B85" font-size="11.5">quadratic attention cost drops 16× before a single block runs</text>
+  <text x="620" y="322" fill="#FF8A8F" font-size="12.5" font-family="ui-monospace, Consolas, monospace">[T/640, d]</text>
+  <text x="800" y="316" fill="#8A99B3" font-size="12">25 frames / second</text>
+  <text x="800" y="334" fill="#5D6B85" font-size="11.5">40 ms per output token</text>
+
+  <path d="M305,362 L305,390" stroke="#4A5878" stroke-width="1.6" marker-end="url(#ar)"/>
+
+  <!-- ============ 4. encoder ============ -->
+  <rect x="70" y="396" width="470" height="290" rx="13" fill="url(#encFill)" stroke="#33405E"/>
+  <rect x="70" y="396" width="4" height="290" rx="2" fill="url(#accent)"/>
+  <text x="94" y="424" fill="#E8EDF5" font-size="15" font-weight="600">Metro encoder</text>
+  <text x="94" y="443" fill="#8A99B3" font-size="12">N × Metro block — bidirectional, non-autoregressive</text>
+
+  <!-- stacked blocks -->
+  <rect x="100" y="460" width="330" height="30" rx="7" fill="#1E2A3D" stroke="#3A4A6B"/>
+  <text x="118" y="480" fill="#C7D2E4" font-size="12">Metro block  1</text>
+
+  <rect x="100" y="496" width="330" height="30" rx="7" fill="#1E2A3D" stroke="#3A4A6B"/>
+  <text x="118" y="516" fill="#C7D2E4" font-size="12">Metro block  2</text>
+
+  <text x="265" y="546" fill="#5D6B85" font-size="15" text-anchor="middle">⋮</text>
+
+  <!-- intermediate CTC tap -->
+  <rect x="100" y="558" width="330" height="30" rx="7" fill="#1E2A3D" stroke="#8A5A1E"/>
+  <text x="118" y="578" fill="#C7D2E4" font-size="12">Metro block  N/2</text>
+  <path d="M430,573 L494,573" stroke="#F5A524" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arAmber)"/>
+  <rect x="498" y="558" width="30" height="30" rx="7" fill="#2A2214" stroke="#8A5A1E"/>
+  <text x="513" y="578" fill="#F5A524" font-size="11" text-anchor="middle" font-weight="700">aux</text>
+
+  <text x="265" y="608" fill="#5D6B85" font-size="15" text-anchor="middle">⋮</text>
+
+  <rect x="100" y="620" width="330" height="30" rx="7" fill="#1E2A3D" stroke="#3A4A6B"/>
+  <text x="118" y="640" fill="#C7D2E4" font-size="12">Metro block  N</text>
+
+  <text x="94" y="672" fill="#5D6B85" font-size="11.5">stochastic depth increases linearly with depth</text>
+
+  <text x="620" y="470" fill="#FF8A8F" font-size="12.5" font-family="ui-monospace, Consolas, monospace">[T/640, d]</text>
+  <text x="800" y="440" fill="#8A99B3" font-size="12">every frame attends to</text>
+  <text x="800" y="457" fill="#8A99B3" font-size="12">the whole utterance —</text>
+  <text x="800" y="474" fill="#8A99B3" font-size="12">one forward pass, no</text>
+  <text x="800" y="491" fill="#8A99B3" font-size="12">decoder loop</text>
+  <text x="800" y="524" fill="#F5A524" font-size="12" font-weight="600">aux CTC head</text>
+  <text x="800" y="541" fill="#8A99B3" font-size="12">trains mid-stack layers</text>
+  <text x="800" y="558" fill="#8A99B3" font-size="12">directly; dropped at</text>
+  <text x="800" y="575" fill="#8A99B3" font-size="12">inference time</text>
+
+  <path d="M305,686 L305,714" stroke="#4A5878" stroke-width="1.6" marker-end="url(#ar)"/>
+
+  <!-- ============ 5. CTC head ============ -->
+  <rect x="70" y="720" width="470" height="60" rx="11" fill="#131A26" stroke="#26314A"/>
+  <rect x="70" y="720" width="4" height="60" rx="2" fill="url(#accent)"/>
+  <text x="94" y="746" fill="#E8EDF5" font-size="15" font-weight="600">CTC projection + log-softmax</text>
+  <text x="94" y="766" fill="#8A99B3" font-size="12">Linear(d → V) · index 0 reserved for the CTC blank</text>
+  <text x="620" y="752" fill="#FF8A8F" font-size="12.5" font-family="ui-monospace, Consolas, monospace">[T/640, V]</text>
+  <text x="800" y="746" fill="#8A99B3" font-size="12">per-frame log-probs</text>
+  <text x="800" y="764" fill="#5D6B85" font-size="11.5">V = BPE vocabulary</text>
+
+  <!-- fork -->
+  <path d="M305,780 L305,802" stroke="#4A5878" stroke-width="1.6"/>
+  <path d="M305,802 L170,802 L170,824" stroke="#E8232A" stroke-width="1.6" fill="none" marker-end="url(#arRed)"/>
+  <path d="M305,802 L440,802 L440,824" stroke="#F5A524" stroke-width="1.6" fill="none" marker-end="url(#arAmber)"/>
+
+  <!-- ============ 6. decoding ============ -->
+  <rect x="70" y="830" width="200" height="72" rx="11" fill="#1B1114" stroke="#7A1D22"/>
+  <text x="90" y="856" fill="#FF8A8F" font-size="14" font-weight="700">Greedy CTC</text>
+  <text x="90" y="875" fill="#8A99B3" font-size="11.5">argmax → collapse</text>
+  <text x="90" y="891" fill="#8A99B3" font-size="11.5">repeats → drop blanks</text>
+
+  <rect x="340" y="830" width="270" height="72" rx="11" fill="#1C1710" stroke="#8A5A1E"/>
+  <text x="360" y="856" fill="#F5A524" font-size="14" font-weight="700">Beam search + language head</text>
+  <text x="360" y="875" fill="#8A99B3" font-size="11.5">KenLM n-gram rescoring over K beams</text>
+  <text x="360" y="891" fill="#8A99B3" font-size="11.5">swappable · text-only training</text>
+
+  <text x="800" y="856" fill="#8A99B3" font-size="12">~2 ms per utterance</text>
+  <text x="800" y="882" fill="#8A99B3" font-size="12">~10–250 ms, higher accuracy</text>
+</svg>

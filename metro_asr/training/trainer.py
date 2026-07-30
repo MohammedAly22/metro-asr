@@ -37,8 +37,12 @@ class MetroTrainer:
         self.optimizer = build_optimizer(self.raw_model, train_cfg)
         self.scheduler = build_scheduler(self.optimizer, train_cfg)
 
-        self.use_bf16 = train_cfg.get("bf16", False)
-        self.use_fp16 = train_cfg.get("fp16", False) and not self.use_bf16
+        # Mixed precision is CUDA-only here; on CPU the autocast/GradScaler path
+        # is both unsupported and pointless, so it is disabled rather than left
+        # to warn and silently fall back.
+        cuda_available = torch.cuda.is_available()
+        self.use_bf16 = train_cfg.get("bf16", False) and cuda_available
+        self.use_fp16 = train_cfg.get("fp16", False) and not self.use_bf16 and cuda_available
         self.use_amp = self.use_bf16 or self.use_fp16
         self.amp_dtype = torch.bfloat16 if self.use_bf16 else torch.float16
 
@@ -70,16 +74,23 @@ class MetroTrainer:
         else:
             train_sampler = RandomSampler(train_dataset)
 
+        # DataLoader rejects a non-zero timeout when it runs in-process, and
+        # pinning memory is only useful when there is a device to pin for.
+        worker_kwargs = {
+            "num_workers": num_workers,
+            "pin_memory": cuda_available,
+        }
+        if num_workers > 0:
+            worker_kwargs["timeout"] = 120
+            worker_kwargs["persistent_workers"] = True
+
         self.train_loader = DataLoader(
             train_dataset,
             batch_size=batch_size,
             sampler=train_sampler,
-            num_workers=num_workers,
             collate_fn=collator,
-            pin_memory=True,
             drop_last=True,
-            timeout=120,
-            persistent_workers=True if num_workers > 0 else False,
+            **worker_kwargs,
         )
 
         self.eval_loader = None
@@ -88,9 +99,8 @@ class MetroTrainer:
                 eval_dataset,
                 batch_size=batch_size,
                 shuffle=False,
-                num_workers=num_workers,
                 collate_fn=collator,
-                pin_memory=True,
+                **worker_kwargs,
             )
 
         self.global_step = 0

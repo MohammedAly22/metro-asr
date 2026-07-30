@@ -51,11 +51,11 @@ training:
   save_every_n_steps: 5000
   eval_every_n_steps: 1000
   log_every_n_steps: 10
-  checkpoint_dir: "checkpoints/metro-small-v2"
-  resume_from: "checkpoints/metro-small-v2/checkpoint_step_265000.pt"
+  checkpoint_dir: "checkpoints/metro-small"
+  resume_from: null
 
   wandb_project: "metro-asr"
-  wandb_run_name: "Metro-Small-v2-EgyAR-CS-Beast"
+  wandb_run_name: "metro-small"
 
 data:
   datasets:
@@ -67,7 +67,7 @@ data:
     - "Raniahossam33/Egyptian_TTS3RS"
     - "ahmedbasemdev/egyptain-tts-dataset"
     - "MohamedRashad/arabic-english-code-switching"
-    - "librispeech_asr::train.clean.100"
+    - "librispeech_asr:clean:train.clean.100"
   eval_split_ratio: 0.02
   num_workers: 4
   cache_dir: "data_cache"

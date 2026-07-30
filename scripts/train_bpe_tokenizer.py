@@ -9,6 +9,7 @@ while Arabic coverage remains excellent.
 Usage:
     python scripts/train_bpe_tokenizer.py
 """
+import argparse
 import os
 import sys
 import tempfile
@@ -16,9 +17,13 @@ import random
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from metro_asr.utils import enable_utf8_stdout
+
+enable_utf8_stdout()
+
 # ========================= CONFIGURATION =========================
-VOCAB_SIZE = 5000
-OUTPUT_DIR = "tokenizer_bpe5k"
+VOCAB_SIZE = 5000                       # 5000 (small) / 8000 (medium) / 16000 (large)
+OUTPUT_DIR = "tokenizer_bpe5k"          # writes bpe.model + bpe.vocab here
 DATA_DIR = "data_prepared/train"        # Prepared Arabic ASR transcripts
 
 # ---- Arabic sources ----
@@ -201,49 +206,66 @@ def load_cs_texts():
 
 
 def main():
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--corpus", help="pre-built text file (skips all dataset downloads)")
+    ap.add_argument("--vocab-size", type=int, default=VOCAB_SIZE)
+    ap.add_argument("--out", default=OUTPUT_DIR, help="directory for bpe.model / bpe.vocab")
+    args = ap.parse_args()
 
-    # ---- Collect all Arabic sources ----
-    arabic_asr = load_arabic_asr_texts()
-    egyptian = load_egyptian_corpus()
-    arabic_wiki = load_arabic_wiki()
-    cs_texts = load_cs_texts()
+    vocab_size = args.vocab_size
+    output_dir = args.out
+    os.makedirs(output_dir, exist_ok=True)
 
-    all_arabic = arabic_asr + egyptian + arabic_wiki + cs_texts
-    print(f"\n📊 Total Arabic sentences: {len(all_arabic)}")
+    if args.corpus:
+        print(f"Using corpus: {args.corpus}")
+        with open(args.corpus, encoding="utf-8") as f:
+            mixed = [l.strip() for l in f if l.strip()]
+        random.seed(42)
+        random.shuffle(mixed)
+        print(f"  {len(mixed):,} sentences")
+    else:
+        # ---- Collect all Arabic sources ----
+        arabic_asr = load_arabic_asr_texts()
+        egyptian = load_egyptian_corpus()
+        arabic_wiki = load_arabic_wiki()
+        cs_texts = load_cs_texts()
 
-    # ---- Collect all English sources ----
-    librispeech = load_librispeech_texts()
-    english_wiki = load_english_wiki()
+        all_arabic = arabic_asr + egyptian + arabic_wiki + cs_texts
+        print(f"\n📊 Total Arabic sentences: {len(all_arabic)}")
 
-    all_english = librispeech + english_wiki
-    print(f"📊 Total English sentences: {len(all_english)}")
+        # ---- Collect all English sources ----
+        librispeech = load_librispeech_texts()
+        english_wiki = load_english_wiki()
 
-    # ---- Force 50/50 balance ----
-    # Take the smaller side's count, then match the other
-    target_per_lang = min(len(all_arabic), len(all_english))
-    # Cap at 2M total (1M per language) to keep training fast
-    target_per_lang = min(target_per_lang, 1000000)
+        all_english = librispeech + english_wiki
+        print(f"📊 Total English sentences: {len(all_english)}")
 
-    random.seed(42)
-    random.shuffle(all_arabic)
-    random.shuffle(all_english)
+        # ---- Force 50/50 balance ----
+        # Take the smaller side's count, then match the other
+        target_per_lang = min(len(all_arabic), len(all_english))
+        # Cap at 2M total (1M per language) to keep training fast
+        target_per_lang = min(target_per_lang, 1000000)
 
-    balanced_arabic = all_arabic[:target_per_lang]
-    balanced_english = all_english[:target_per_lang]
+        random.seed(42)
+        random.shuffle(all_arabic)
+        random.shuffle(all_english)
 
-    # Add ALL CS texts (they bridge both languages)
-    mixed = balanced_arabic + balanced_english + cs_texts
-    random.shuffle(mixed)
+        balanced_arabic = all_arabic[:target_per_lang]
+        balanced_english = all_english[:target_per_lang]
 
-    n_total = len(mixed)
-    print(f"\n🔀 Balanced corpus:")
-    print(f"  Arabic:  {len(balanced_arabic):,} sentences")
-    print(f"  English: {len(balanced_english):,} sentences")
-    print(f"  CS:      {len(cs_texts):,} sentences (added on top)")
-    print(f"  Total:   {n_total:,} sentences")
-    print(f"  Balance: {len(balanced_arabic)/n_total*100:.1f}% AR / {len(balanced_english)/n_total*100:.1f}% EN")
-    print(f"\n🔤 Training BPE tokenizer, vocab_size={VOCAB_SIZE}...")
+        # Add ALL CS texts (they bridge both languages)
+        mixed = balanced_arabic + balanced_english + cs_texts
+        random.shuffle(mixed)
+
+        n_total = len(mixed)
+        print(f"\n🔀 Balanced corpus:")
+        print(f"  Arabic:  {len(balanced_arabic):,} sentences")
+        print(f"  English: {len(balanced_english):,} sentences")
+        print(f"  CS:      {len(cs_texts):,} sentences (added on top)")
+        print(f"  Total:   {n_total:,} sentences")
+        print(f"  Balance: {len(balanced_arabic)/n_total*100:.1f}% AR / {len(balanced_english)/n_total*100:.1f}% EN")
+
+    print(f"\n🔤 Training BPE tokenizer, vocab_size={vocab_size}...")
 
     tmp_file = tempfile.NamedTemporaryFile(
         mode="w", suffix=".txt", delete=False, encoding="utf-8"
@@ -254,8 +276,8 @@ def main():
 
     import sentencepiece as spm
 
-    sp_vocab = VOCAB_SIZE - 3  # Reserve 3 for blank, unk, pad
-    model_prefix = os.path.join(OUTPUT_DIR, "bpe")
+    sp_vocab = vocab_size - 3  # Reserve 3 for blank, unk, pad
+    model_prefix = os.path.join(output_dir, "bpe")
 
     spm.SentencePieceTrainer.Train(
         input=tmp_file.name,

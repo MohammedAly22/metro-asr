@@ -7,6 +7,10 @@ from tqdm import tqdm
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from metro_asr.utils import enable_utf8_stdout
+
+enable_utf8_stdout()
+
 from metro_asr.utils.config import load_config
 from metro_asr.utils.logger import print_banner
 from metro_asr.model.metro import MetroASR
@@ -18,37 +22,19 @@ from metro_asr.data.features import LogMelFeatureExtractor, resample_audio
 
 # Models to evaluate — add as many as you want to compare
 MODELS = [
-    # {
-    #     "name": "Metro-Tiny (Char)",
-    #     "config": "configs/metro_tiny_char.yaml",
-    #     "checkpoint": "checkpoints/metro-22m/best_model.pt",
-    #     "tokenizer_dir": "tokenizer",
-    # },
     {
-        "name": "Metro-Tiny (BPE)",
-        "config": "configs/metro_tiny.yaml",
-        "checkpoint": "checkpoints/metro-tiny/best_model.pt",
-        "tokenizer_dir": "tokenizer_final",
-    },
-    {
-        "name": "Metro-Small (BPE)",
-        "config": "configs/metro_small_v1.yaml",
-        "checkpoint": "checkpoints/metro-small/best_model.pt",
-        "tokenizer_dir": "tokenizer_bpe1000",
-    },
-    {
-        "name": "Metro-Small V2(BPE)",
-        "config": "configs/metro_small.yaml",
-        "checkpoint": "checkpoints/metro-small-v2/best_model.pt",
-        "tokenizer_dir": "tokenizer_bpe5k_v2",
+        "name": "Metro-Small",
+        "config": "checkpoints/config.yaml",
+        "checkpoint": "checkpoints/model.pt",
+        "tokenizer_dir": "checkpoints",
     },
 ]
 
 # Test data
-TEST_DATA_PATH = "data_prepared_v2/test"
+TEST_DATA_PATH = "data_prepared/test"
 
 # Language Model (set LM_PATH to None to disable)
-LM_PATH = "lm_v2/lm_5gram.bin"  # None = greedy only
+LM_PATH = "checkpoints/lm_5gram.bin"  # None = greedy only
 BEAM_WIDTH = 200
 LM_ALPHA = 0.5
 LM_BETA = 3.0
@@ -59,7 +45,7 @@ USE_BEAM_LM = True  # Only if LM_PATH is set
 
 # Output
 OUTPUT_DIR = "eval_results"
-DEVICE = "cuda:1"
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # =================================================================
 

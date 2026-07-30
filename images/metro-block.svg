@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 570" width="1060" height="570"
+     font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B0F17"/>
+      <stop offset="100%" stop-color="#0E1420"/>
+    </linearGradient>
+    <linearGradient id="acc2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#E8232A"/>
+      <stop offset="100%" stop-color="#FF5A60"/>
+    </linearGradient>
+    <marker id="a2" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#4A5878"/>
+    </marker>
+    <marker id="a2g" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#3E9C6B"/>
+    </marker>
+  </defs>
+
+  <rect width="1060" height="570" fill="url(#bg2)"/>
+
+  <rect x="50" y="32" width="4" height="22" rx="2" fill="url(#acc2)"/>
+  <text x="68" y="50" fill="#E8EDF5" font-size="20" font-weight="700">Inside one Metro block</text>
+  <text x="68" y="72" fill="#8A99B3" font-size="13">Macaron-style sandwich: half-step FFN → attention → convolution → half-step FFN</text>
+
+  <!-- pipeline y = 130..300, boxes -->
+  <!-- input -->
+  <text x="60" y="166" fill="#5D6B85" font-size="12" font-family="ui-monospace, Consolas, monospace">x</text>
+  <path d="M74,160 L104,160" stroke="#4A5878" stroke-width="1.6" marker-end="url(#a2)"/>
+
+  <!-- FFN 1 -->
+  <rect x="108" y="104" width="150" height="112" rx="11" fill="#131A26" stroke="#26314A"/>
+  <rect x="108" y="104" width="150" height="4" rx="2" fill="url(#acc2)"/>
+  <text x="183" y="130" fill="#E8EDF5" font-size="13.5" font-weight="600" text-anchor="middle">SwiGLU FFN</text>
+  <text x="183" y="150" fill="#8A99B3" font-size="11.5" text-anchor="middle">RMSNorm</text>
+  <text x="183" y="167" fill="#8A99B3" font-size="11.5" text-anchor="middle">SiLU(W₁x) ⊙ W₂x</text>
+  <text x="183" y="184" fill="#8A99B3" font-size="11.5" text-anchor="middle">↓ W₃</text>
+  <text x="183" y="205" fill="#FF8A8F" font-size="11.5" text-anchor="middle" font-weight="600">½ residual</text>
+
+  <path d="M258,160 L292,160" stroke="#4A5878" stroke-width="1.6" marker-end="url(#a2)"/>
+
+  <!-- Attention -->
+  <rect x="296" y="104" width="170" height="112" rx="11" fill="#131A26" stroke="#26314A"/>
+  <rect x="296" y="104" width="170" height="4" rx="2" fill="url(#acc2)"/>
+  <text x="381" y="130" fill="#E8EDF5" font-size="13.5" font-weight="600" text-anchor="middle">RoPE self-attention</text>
+  <text x="381" y="150" fill="#8A99B3" font-size="11.5" text-anchor="middle">RMSNorm · h heads</text>
+  <text x="381" y="167" fill="#8A99B3" font-size="11.5" text-anchor="middle">rotary Q/K, bias-free</text>
+  <text x="381" y="184" fill="#8A99B3" font-size="11.5" text-anchor="middle">scaled dot-product</text>
+  <text x="381" y="205" fill="#FF8A8F" font-size="11.5" text-anchor="middle" font-weight="600">full residual</text>
+
+  <path d="M466,160 L500,160" stroke="#4A5878" stroke-width="1.6" marker-end="url(#a2)"/>
+
+  <!-- Convolution -->
+  <rect x="504" y="104" width="180" height="112" rx="11" fill="#131A26" stroke="#26314A"/>
+  <rect x="504" y="104" width="180" height="4" rx="2" fill="url(#acc2)"/>
+  <text x="594" y="130" fill="#E8EDF5" font-size="13.5" font-weight="600" text-anchor="middle">SE-gated convolution</text>
+  <text x="594" y="150" fill="#8A99B3" font-size="11.5" text-anchor="middle">pointwise ↑2× → GLU</text>
+  <text x="594" y="167" fill="#8A99B3" font-size="11.5" text-anchor="middle">depthwise k=31 · BN · SiLU</text>
+  <text x="594" y="184" fill="#8A99B3" font-size="11.5" text-anchor="middle">squeeze-excite → pointwise ↓</text>
+  <text x="594" y="205" fill="#FF8A8F" font-size="11.5" text-anchor="middle" font-weight="600">full residual</text>
+
+  <path d="M684,160 L718,160" stroke="#4A5878" stroke-width="1.6" marker-end="url(#a2)"/>
+
+  <!-- FFN 2 -->
+  <rect x="722" y="104" width="150" height="112" rx="11" fill="#131A26" stroke="#26314A"/>
+  <rect x="722" y="104" width="150" height="4" rx="2" fill="url(#acc2)"/>
+  <text x="797" y="130" fill="#E8EDF5" font-size="13.5" font-weight="600" text-anchor="middle">SwiGLU FFN</text>
+  <text x="797" y="150" fill="#8A99B3" font-size="11.5" text-anchor="middle">RMSNorm</text>
+  <text x="797" y="167" fill="#8A99B3" font-size="11.5" text-anchor="middle">SiLU(W₁x) ⊙ W₂x</text>
+  <text x="797" y="184" fill="#8A99B3" font-size="11.5" text-anchor="middle">↓ W₃</text>
+  <text x="797" y="205" fill="#FF8A8F" font-size="11.5" text-anchor="middle" font-weight="600">½ residual</text>
+
+  <path d="M872,160 L906,160" stroke="#4A5878" stroke-width="1.6" marker-end="url(#a2)"/>
+
+  <!-- final norm -->
+  <rect x="910" y="130" width="106" height="60" rx="11" fill="#131A26" stroke="#26314A"/>
+  <text x="963" y="156" fill="#E8EDF5" font-size="13" font-weight="600" text-anchor="middle">RMSNorm</text>
+  <text x="963" y="175" fill="#8A99B3" font-size="11.5" text-anchor="middle">output</text>
+
+  <!-- stochastic depth bracket, spanning the four residual modules -->
+  <path d="M108,250 L108,262 L872,262 L872,250" stroke="#3E9C6B" stroke-width="1.4" fill="none" stroke-dasharray="5 4"/>
+  <path d="M490,262 L490,288" stroke="#3E9C6B" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#a2g)"/>
+
+  <rect x="245" y="292" width="490" height="64" rx="10" fill="#0F1D17" stroke="#2C5C43"/>
+  <text x="490" y="313" fill="#5BC98D" font-size="12.5" text-anchor="middle" font-weight="600">Stochastic depth</text>
+  <text x="490" y="332" fill="#8A99B3" font-size="11" text-anchor="middle">during training the whole block is skipped with probability</text>
+  <text x="490" y="349" fill="#C7D2E4" font-size="11" text-anchor="middle" font-family="ui-monospace, Consolas, monospace">p = p_max · i / (N − 1)</text>
+
+  <!-- ============ why panel ============ -->
+  <text x="50" y="392" fill="#5D6B85" font-size="11" font-weight="700" letter-spacing="1.6">WHY THESE CHOICES</text>
+
+  <g>
+    <rect x="50" y="406" width="236" height="132" rx="11" fill="#131A26" stroke="#26314A"/>
+    <rect x="50" y="406" width="3" height="132" rx="2" fill="#E8232A"/>
+    <text x="70" y="432" fill="#E8EDF5" font-size="13" font-weight="600">RoPE, not absolute PE</text>
+    <text x="70" y="455" fill="#8A99B3" font-size="11.5">Position enters as a rotation of</text>
+    <text x="70" y="472" fill="#8A99B3" font-size="11.5">Q and K, so attention depends on</text>
+    <text x="70" y="489" fill="#8A99B3" font-size="11.5">relative offset. Utterances longer</text>
+    <text x="70" y="506" fill="#8A99B3" font-size="11.5">than anything seen in training</text>
+    <text x="70" y="523" fill="#8A99B3" font-size="11.5">still decode sensibly.</text>
+  </g>
+
+  <g>
+    <rect x="302" y="406" width="236" height="132" rx="11" fill="#131A26" stroke="#26314A"/>
+    <rect x="302" y="406" width="3" height="132" rx="2" fill="#E8232A"/>
+    <text x="322" y="432" fill="#E8EDF5" font-size="13" font-weight="600">RMSNorm, pre-norm</text>
+    <text x="322" y="455" fill="#8A99B3" font-size="11.5">No mean subtraction and no bias</text>
+    <text x="322" y="472" fill="#8A99B3" font-size="11.5">term — one reduction instead of</text>
+    <text x="322" y="489" fill="#8A99B3" font-size="11.5">two. Placing it before each</text>
+    <text x="322" y="506" fill="#8A99B3" font-size="11.5">sub-layer keeps gradients clean</text>
+    <text x="322" y="523" fill="#8A99B3" font-size="11.5">in deep stacks.</text>
+  </g>
+
+  <g>
+    <rect x="554" y="406" width="236" height="132" rx="11" fill="#131A26" stroke="#26314A"/>
+    <rect x="554" y="406" width="3" height="132" rx="2" fill="#E8232A"/>
+    <text x="574" y="432" fill="#E8EDF5" font-size="13" font-weight="600">SE-gated depthwise conv</text>
+    <text x="574" y="455" fill="#8A99B3" font-size="11.5">Attention is global; the k=31</text>
+    <text x="574" y="472" fill="#8A99B3" font-size="11.5">depthwise kernel covers ~1.24 s</text>
+    <text x="574" y="489" fill="#8A99B3" font-size="11.5">of local context. Squeeze-excite</text>
+    <text x="574" y="506" fill="#8A99B3" font-size="11.5">reweights channels from a global</text>
+    <text x="574" y="523" fill="#8A99B3" font-size="11.5">average — cheap, and it helps.</text>
+  </g>
+
+  <g>
+    <rect x="806" y="406" width="210" height="132" rx="11" fill="#131A26" stroke="#26314A"/>
+    <rect x="806" y="406" width="3" height="132" rx="2" fill="#E8232A"/>
+    <text x="826" y="432" fill="#E8EDF5" font-size="13" font-weight="600">SwiGLU FFN</text>
+    <text x="826" y="455" fill="#8A99B3" font-size="11.5">A gate learns which channels</text>
+    <text x="826" y="472" fill="#8A99B3" font-size="11.5">to pass. Two half-weighted</text>
+    <text x="826" y="489" fill="#8A99B3" font-size="11.5">FFNs around the attention</text>
+    <text x="826" y="506" fill="#8A99B3" font-size="11.5">block beat one full-weight</text>
+    <text x="826" y="523" fill="#8A99B3" font-size="11.5">FFN at equal cost.</text>
+  </g>
+</svg>

@@ -39,6 +39,37 @@ class LogMelFeatureExtractor:
         return audio_length // self.mel_transform.hop_length + 1
 
 
+def load_audio_file(path):
+    """
+    Decode an audio file to a mono float32 tensor, returning (waveform, sample_rate).
+
+    soundfile is tried first: torchaudio >= 2.9 routes ``load`` through
+    TorchCodec, which is a separate install and not a dependency of this package.
+    """
+    try:
+        import soundfile as sf
+        data, sr = sf.read(path, dtype="float32", always_2d=True)
+        return torch.from_numpy(data).mean(dim=1), sr
+    except Exception:
+        pass
+
+    try:
+        waveform, sr = torchaudio.load(path)
+        return waveform.mean(dim=0), sr
+    except Exception:
+        pass
+
+    try:
+        import librosa
+        data, sr = librosa.load(path, sr=None, mono=True)
+        return torch.from_numpy(data).float(), sr
+    except Exception as exc:
+        raise RuntimeError(
+            f"Could not decode '{path}'. Install a decoder for this format: "
+            "`pip install soundfile` (wav/flac/ogg) or `pip install librosa` (mp3/m4a)."
+        ) from exc
+
+
 def resample_audio(waveform, orig_sr, target_sr=16000):
     if orig_sr == target_sr:
         return waveform

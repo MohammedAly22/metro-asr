@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 620" width="1060" height="620"
+     font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg6" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B0F17"/>
+      <stop offset="100%" stop-color="#0E1420"/>
+    </linearGradient>
+    <linearGradient id="acc6" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#E8232A"/>
+      <stop offset="100%" stop-color="#FF5A60"/>
+    </linearGradient>
+    <marker id="a6" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#4A5878"/>
+    </marker>
+  </defs>
+
+  <rect width="1060" height="620" fill="url(#bg6)"/>
+
+  <rect x="50" y="30" width="4" height="22" rx="2" fill="url(#acc6)"/>
+  <text x="68" y="48" fill="#E8EDF5" font-size="20" font-weight="700">Two ways to turn frames into words</text>
+  <text x="68" y="70" fill="#8A99B3" font-size="12.5">Both start from the same CTC log-probability matrix. Only the search over it differs.</text>
+
+  <!-- shared input -->
+  <rect x="330" y="94" width="400" height="46" rx="10" fill="#131A26" stroke="#33405E"/>
+  <text x="530" y="115" fill="#E8EDF5" font-size="13" font-weight="600" text-anchor="middle">CTC log-probabilities</text>
+  <text x="530" y="132" fill="#8A99B3" font-size="11.5" text-anchor="middle" font-family="ui-monospace, Consolas, monospace">[frames, 5000] — 25 frames / second</text>
+
+  <path d="M530,140 L530,158" stroke="#4A5878" stroke-width="1.6"/>
+  <path d="M530,158 L280,158 L280,180" stroke="#4A5878" stroke-width="1.6" fill="none" marker-end="url(#a6)"/>
+  <path d="M530,158 L780,158 L780,180" stroke="#4A5878" stroke-width="1.6" fill="none" marker-end="url(#a6)"/>
+
+  <!-- ============== GREEDY ============== -->
+  <rect x="60" y="186" width="440" height="200" rx="12" fill="#1B1114" stroke="#7A1D22"/>
+  <text x="82" y="212" fill="#FF8A8F" font-size="14" font-weight="700">Greedy CTC</text>
+  <text x="82" y="232" fill="#8A99B3" font-size="11.5">Independent argmax per frame, then collapse.</text>
+
+  <text x="82" y="262" fill="#5D6B85" font-size="11" font-weight="700" letter-spacing="1.3">ALGORITHM</text>
+  <text x="82" y="284" fill="#C7D2E4" font-size="11.5">1.  take argmax of every frame</text>
+  <text x="82" y="303" fill="#C7D2E4" font-size="11.5">2.  merge runs of the same token</text>
+  <text x="82" y="322" fill="#C7D2E4" font-size="11.5">3.  delete blanks</text>
+
+  <rect x="82" y="338" width="396" height="34" rx="8" fill="#0F1520" stroke="#26314A"/>
+  <text x="98" y="359" fill="#8A99B3" font-size="11.5">no lexicon · no LM · nothing to load ·</text>
+  <text x="330" y="359" fill="#5BC98D" font-size="11.5" font-weight="600">~2 ms per utterance</text>
+
+  <!-- ============== BEAM + LM ============== -->
+  <rect x="560" y="186" width="440" height="200" rx="12" fill="#1C1710" stroke="#8A5A1E"/>
+  <text x="582" y="212" fill="#F5A524" font-size="14" font-weight="700">Beam search + language head</text>
+  <text x="582" y="232" fill="#8A99B3" font-size="11.5">Keeps K hypotheses alive and scores whole words.</text>
+
+  <text x="582" y="262" fill="#5D6B85" font-size="11" font-weight="700" letter-spacing="1.3">ALGORITHM</text>
+  <text x="582" y="284" fill="#C7D2E4" font-size="11.5">1.  extend every beam by every plausible token</text>
+  <text x="582" y="303" fill="#C7D2E4" font-size="11.5">2.  merge BPE pieces into words as they complete</text>
+  <text x="582" y="322" fill="#C7D2E4" font-size="11.5">3.  add α·log P(word | history) + β per word, prune to K</text>
+
+  <rect x="582" y="338" width="396" height="34" rx="8" fill="#0F1520" stroke="#26314A"/>
+  <text x="598" y="359" fill="#8A99B3" font-size="11.5">n-gram model in RAM ·</text>
+  <text x="756" y="359" fill="#F5A524" font-size="11.5" font-weight="600">~10–250 ms per utterance</text>
+
+  <!-- ============== real example ============== -->
+  <text x="68" y="424" fill="#5D6B85" font-size="11" font-weight="700" letter-spacing="1.5">SAME AUDIO, BOTH DECODERS — test_samples/1.wav</text>
+
+  <rect x="60" y="438" width="940" height="60" rx="10" fill="#1B1114" stroke="#4A2027"/>
+  <text x="80" y="462" fill="#FF8A8F" font-size="11.5" font-weight="700">GREEDY</text>
+  <text x="80" y="482" fill="#8A99B3" font-size="11">RTF 0.017</text>
+  <text x="560" y="475" fill="#E8EDF5" font-size="16" text-anchor="middle">تذرج و الحقيقةقيقة هو تصميممه و رغم بسطه إلا إنه عبقري</text>
+
+  <rect x="60" y="506" width="940" height="60" rx="10" fill="#1C1710" stroke="#5C3D14"/>
+  <text x="80" y="530" fill="#F5A524" font-size="11.5" font-weight="700">BEAM + KenLM</text>
+  <text x="80" y="550" fill="#8A99B3" font-size="11">RTF 0.025</text>
+  <text x="560" y="543" fill="#E8EDF5" font-size="16" text-anchor="middle">تدرج و الحقيقة هو تصميم و رغم بساطته إلا إنه عبقري</text>
+
+  <text x="68" y="592" fill="#5D6B85" font-size="11.5">The language head repairs exactly the errors CTC&#8217;s per-frame independence creates: doubled syllables, dropped affixes, near-homophones.</text>
+</svg>

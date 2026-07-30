@@ -11,7 +11,25 @@ _THEME = Theme({
     "success": "bold green",
 })
 
-_console = Console(theme=_THEME)
+
+def _utf8_stdout():
+    """
+    Force UTF-8 on stdout.
+
+    Windows consoles default to a legacy code page (cp1252), which raises
+    UnicodeEncodeError the moment an Arabic transcript is logged — which this
+    trainer does on every eval step.
+    """
+    stream = sys.stdout
+    if getattr(stream, "encoding", "").lower().replace("-", "") not in ("utf8",):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+    return stream
+
+
+_console = Console(theme=_THEME, file=_utf8_stdout())
 _logger_cache = {}
 
 

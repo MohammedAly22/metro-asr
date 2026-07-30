@@ -1,227 +1,63 @@
 import os
-import time
 import numpy as np
 import torch
-import torchaudio
 import gradio as gr
 
-from metro_asr.utils.config import load_config
-from metro_asr.model.metro import MetroASR
-from metro_asr.model.tokenizer import build_tokenizer
-from metro_asr.model.decoder import CTCBeamSearchDecoder
-from metro_asr.data.features import LogMelFeatureExtractor, resample_audio
+from metro_asr import MetroASREngine
 
 # ========================= CONFIGURATION =========================
 DEVICE = "cpu"
-LM_PATH = "lm/lm_4gram.arpa"
+
+# A local directory (config.yaml + model.pt + bpe.model), a size alias
+# ("small"), or a HuggingFace repo id.
+MODEL = os.environ.get("METRO_MODEL", "checkpoints")
+
+# "auto" picks up a KenLM binary next to the checkpoint; None disables beam search.
+LM_PATH = os.environ.get("METRO_LM", "auto")
+
 SERVER_PORT = int(os.environ.get("METRO_PORT", 7860))
 STREAM_MIN_DURATION = 3.0
 STREAM_TARGET_SR = 16000
-
-MODEL_REGISTRY = {
-    "Metro-Tiny (26M) BPE": {
-        "config": "configs/metro_tiny.yaml",
-        "checkpoint": "checkpoints/metro-tiny/best_model.pt",
-        "tokenizer_dir": "tokenizer_final",
-        "params": "26M",
-        "d_model": 256,
-        "layers": 12,
-        "heads": 4,
-        "vocab": 106,
-        "status": True,
-    },
-    "Metro-Small (61M)": {
-        "config": "configs/metro_small.yaml",
-        "checkpoint": "checkpoints/metro-small-v2/best_model.pt",
-        "tokenizer_dir": "tokenizer_bpe5k_v2",
-        "params": "58M",
-        "d_model": 384,
-        "layers": 12,
-        "heads": 6,
-        "vocab": 5000,
-        "status": True,
-    },
-    "Metro-Medium (238M)": {
-        "config": "configs/metro_medium.yaml",
-        "checkpoint": "checkpoints/metro-medium/best_model.pt",
-        "tokenizer_dir": "tokenizer_final",
-        "params": "238M",
-        "d_model": 512,
-        "layers": 24,
-        "heads": 8,
-        "vocab": 2000,
-        "status": False,
-    },
-    "Metro-Large (710M)": {
-        "config": "configs/metro_large.yaml",
-        "checkpoint": "checkpoints/metro-large/best_model.pt",
-        "tokenizer_dir": "tokenizer_final",
-        "params": "710M",
-        "d_model": 768,
-        "layers": 32,
-        "heads": 12,
-        "vocab": 4000,
-        "status": False,
-    },
-}
 # =================================================================
 
-# ── Preload default model + LM at startup ──
-_default_key = "Metro-Small (61M)"
-print(f"Loading {_default_key} model...")
-_default_info = MODEL_REGISTRY[_default_key]
-_default_config = load_config(_default_info["config"])
-_default_tokenizer = build_tokenizer(_default_config, _default_info["tokenizer_dir"])
-_default_feature_extractor = LogMelFeatureExtractor(
-    sample_rate=_default_config["audio"]["sample_rate"],
-    n_mels=_default_config["audio"]["n_mels"],
-    n_fft=_default_config["audio"]["n_fft"],
-    hop_length=_default_config["audio"]["hop_length"],
-    win_length=_default_config["audio"]["win_length"],
-)
-_default_model = MetroASR.from_config(_default_config)
-_ckpt = torch.load(_default_info["checkpoint"], map_location="cpu", weights_only=False)
-_default_model.load_state_dict(_ckpt["model_state_dict"])
-_default_model = _default_model.to(DEVICE).eval()
-_default_param_count = _default_model.count_parameters()
-print(f"Model loaded: {_default_param_count:,} params")
-
-_beam_decoder = None
-if LM_PATH and os.path.exists(LM_PATH):
-    print(f"Loading KenLM from {LM_PATH}...")
-    _beam_decoder = CTCBeamSearchDecoder(
-        _default_tokenizer,
-        lm_path=LM_PATH,
-        beam_width=100,
-        alpha=0.5,
-        beta=5.0,
-    )
-    print("LM loaded.")
-
-loaded_models = {
-    _default_key: (_default_model, _default_tokenizer, _default_feature_extractor, _default_param_count)
-}
-lm_decoders = {
-    _default_info["tokenizer_dir"]: _beam_decoder,
-}
-
-
-def get_available_models():
-    available = []
-    for name, info in MODEL_REGISTRY.items():
-        if info["status"] and os.path.exists(info["checkpoint"]):
-            available.append(name)
-        elif not info["status"]:
-            available.append(f"{name} [Coming Soon]")
-        else:
-            available.append(f"{name} [No Checkpoint]")
-    return available
-
-
-def load_model(model_key):
-    clean_key = model_key.split(" [")[0]
-
-    if clean_key in loaded_models:
-        return loaded_models[clean_key]
-
-    if clean_key not in MODEL_REGISTRY:
-        return None, None, None, None
-
-    info = MODEL_REGISTRY[clean_key]
-    if not info["status"] or not os.path.exists(info["checkpoint"]):
-        return None, None, None, None
-
-    config = load_config(info["config"])
-    tokenizer = build_tokenizer(config, info["tokenizer_dir"])
-
-    feature_extractor = LogMelFeatureExtractor(
-        sample_rate=config["audio"]["sample_rate"],
-        n_mels=config["audio"]["n_mels"],
-        n_fft=config["audio"]["n_fft"],
-        hop_length=config["audio"]["hop_length"],
-        win_length=config["audio"]["win_length"],
-    )
-
-    model = MetroASR.from_config(config)
-    ckpt = torch.load(info["checkpoint"], map_location="cpu", weights_only=False)
-    model.load_state_dict(ckpt["model_state_dict"])
-    model = model.to(DEVICE).eval()
-
-    param_count = model.count_parameters()
-    loaded_models[clean_key] = (model, tokenizer, feature_extractor, param_count)
-
-    tok_dir = info["tokenizer_dir"]
-    if tok_dir not in lm_decoders and LM_PATH and os.path.exists(LM_PATH):
-        lm_decoders[tok_dir] = CTCBeamSearchDecoder(
-            tokenizer, lm_path=LM_PATH, beam_width=100, alpha=0.5, beta=5.0,
-        )
-
-    return model, tokenizer, feature_extractor, param_count
+print(f"Loading Metro-ASR from {MODEL}...")
+engine = MetroASREngine.from_pretrained(MODEL, device=DEVICE, lm_path=LM_PATH)
+_param_count = engine.param_count
+print(f"Model loaded: {_param_count:,} params | LM: {'loaded' if engine.has_lm else 'none'}")
 
 
 # ── File upload transcription ──
 
-def transcribe(audio_path, model_choice, decoding_method, beam_width, lm_alpha, lm_beta):
+def transcribe(audio_path, decoding_method, beam_width, lm_alpha, lm_beta):
     if audio_path is None:
         return "", "", ""
 
-    clean_key = model_choice.split(" [")[0]
-    info = MODEL_REGISTRY.get(clean_key)
-    if info is None or not info["status"]:
-        return "This model is not available yet.", "", ""
-
-    if not os.path.exists(info["checkpoint"]):
-        return "Checkpoint not found.", "", ""
-
-    result = load_model(model_choice)
-    if result[0] is None:
-        return "Failed to load model.", "", ""
-
-    model, tokenizer, feature_extractor, param_count = result
-
     try:
-        waveform, sr = torchaudio.load(audio_path)
-        waveform = waveform.mean(dim=0)
-        duration = waveform.shape[0] / sr
-
-        if sr != feature_extractor.sample_rate:
-            waveform = resample_audio(waveform, sr, feature_extractor.sample_rate)
-            if not isinstance(waveform, torch.Tensor):
-                waveform = torch.tensor(waveform, dtype=torch.float32)
-
-        features = feature_extractor(waveform)
-        features = features.unsqueeze(0).to(DEVICE)
-        feature_lengths = torch.tensor([features.shape[1]], dtype=torch.long, device=DEVICE)
-
-        t_start = time.time()
-        with torch.no_grad():
-            log_probs, out_lengths, _ = model(features, feature_lengths)
-        model_time = time.time() - t_start
-
         use_beam = decoding_method == "Beam Search + LM"
 
-        t_decode_start = time.time()
-        if use_beam:
-            tok_dir = info["tokenizer_dir"]
-            decoder = lm_decoders.get(tok_dir)
-            if decoder is not None:
-                results = decoder.decode(log_probs, out_lengths)
-                text = results[0]
-                method_label = f"Beam Search + LM (beam={int(beam_width)}, alpha={lm_alpha}, beta={lm_beta})"
-            else:
-                decoded_ids = model.decode_greedy(log_probs, out_lengths)
-                text = tokenizer.decode(decoded_ids[0])
-                method_label = "Greedy (LM not available)"
+        result = engine.transcribe(
+            audio_path,
+            beam_search=use_beam,
+            beam_width=int(beam_width),
+            lm_alpha=lm_alpha,
+            lm_beta=lm_beta,
+        )
+
+        text = result.text
+        duration = result.duration
+        model_time = result.inference_time
+        decode_time = result.decoding_time
+        total_time = model_time + decode_time
+        rtf = result.rtf
+
+        if use_beam and not engine.has_lm:
+            method_label = "Greedy (LM not available)"
+        elif use_beam:
+            method_label = f"Beam Search + LM (beam={int(beam_width)}, alpha={lm_alpha}, beta={lm_beta})"
         else:
-            decoded_ids = model.decode_greedy(log_probs, out_lengths)
-            text = tokenizer.decode(decoded_ids[0])
             method_label = "Greedy Decoding"
 
-        decode_time = time.time() - t_decode_start
-        total_time = time.time() - t_start
-        rtf = total_time / duration if duration > 0 else 0
-
-        if rtf < 1.0:
+        if rtf < 1.0 and rtf > 0:
             speed_note = f'<div class="speed-badge"><span class="speed-val">{1/rtf:.1f}x</span> faster than real-time</div>'
         else:
             speed_note = f'<div class="speed-badge"><span class="speed-val">{rtf:.1f}x</span> slower than real-time</div>'
@@ -238,7 +74,7 @@ def transcribe(audio_path, model_choice, decoding_method, beam_width, lm_alpha, 
             ("RTF", f"{rtf:.4f}"),
             ("Method", method_label),
             ("Device", DEVICE.upper()),
-            ("Parameters", f"{param_count:,}"),
+            ("Parameters", f"{_param_count:,}"),
         ])
         stats_html = f'<div class="metrics-container">{metrics_rows}</div>'
 
@@ -274,16 +110,7 @@ def _transcribe_waveform(waveform_np):
     if waveform.shape[0] == 0:
         return ""
 
-    features = _default_feature_extractor(waveform)
-    features = features.unsqueeze(0).to(DEVICE)
-    feature_lengths = torch.tensor([features.shape[1]], dtype=torch.long, device=DEVICE)
-
-    with torch.no_grad():
-        log_probs, out_lengths, _ = _default_model(features, feature_lengths)
-
-    decoded_ids = _default_model.decode_greedy(log_probs, out_lengths)
-    text = _default_tokenizer.decode(decoded_ids[0])
-    return text.strip()
+    return engine.transcribe(waveform).text.strip()
 
 
 def transcribe_streaming(audio_chunk, state):
@@ -301,6 +128,7 @@ def transcribe_streaming(audio_chunk, state):
         chunk = chunk.mean(axis=1)
 
     if sr != STREAM_TARGET_SR:
+        import torchaudio
         chunk_tensor = torch.tensor(chunk, dtype=torch.float32).unsqueeze(0)
         resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=STREAM_TARGET_SR)
         chunk = resampler(chunk_tensor).squeeze(0).numpy()
@@ -591,7 +419,7 @@ with gr.Blocks(title="Metro-ASR") as demo:
     gr.HTML(
         '<div class="metro-tags">'
         '<span>CONFORMER</span> <span>CTC</span> <span>KENLM</span> '
-        f'<span>CPU OPTIMIZED</span> <span>{_default_param_count:,} PARAMS</span>'
+        f'<span>CPU OPTIMIZED</span> <span>{_param_count:,} PARAMS</span>'
         '</div>'
     )
 
@@ -609,21 +437,12 @@ with gr.Blocks(title="Metro-ASR") as demo:
                 ),
             )
 
-            _available = get_available_models()
-            _default_dropdown = next((m for m in _available if m.startswith("Metro-Small")), _available[0])
-            with gr.Row():
-                model_dropdown = gr.Dropdown(
-                    choices=_available,
-                    value=_default_dropdown,
-                    label="Model",
-                    info="Select the model variant",
-                )
-                decoding_method = gr.Radio(
-                    choices=["Greedy", "Beam Search + LM"],
-                    value="Beam Search + LM",
-                    label="Decoding",
-                    info="Greedy is instant; Beam + LM is more accurate",
-                )
+            decoding_method = gr.Radio(
+                choices=["Greedy", "Beam Search + LM"],
+                value="Beam Search + LM" if engine.has_lm else "Greedy",
+                label="Decoding",
+                info="Greedy is instant; Beam + LM is more accurate",
+            )
 
             with gr.Group(visible=True, elem_classes=["beam-section"]) as beam_group:
                 beam_width = gr.Slider(
@@ -666,7 +485,7 @@ with gr.Blocks(title="Metro-ASR") as demo:
                 '<div class="stream-hint">'
                 '<span class="pulse-dot"></span>'
                 'Speak into your microphone — transcription updates live '
-                f'(using {_default_key}, greedy decoding)'
+                '(greedy decoding)'
                 '</div>'
             )
 
@@ -710,12 +529,11 @@ with gr.Blocks(title="Metro-ASR") as demo:
     # ── About ──
     with gr.Accordion("About Metro-ASR", open=False):
         gr.Markdown(
-            "**Metro-ASR** is a non-autoregressive CTC-based ASR system "
-            "built on a Conformer encoder with: "
-            "RoPE, SwiGLU, RMSNorm, SE-Conv, Stochastic Depth, Intermediate CTC. "
-            "Trained on 130K+ Egyptian Arabic audio samples with code-switching support. "
-            "Achieves **19.90% WER** (beam+LM) on mixed test set at **RTF 0.004** on CPU. "
-            "This demo runs entirely on **CPU**.",
+            "**Metro-ASR** is a non-autoregressive ASR system built on a Conformer "
+            "acoustic encoder with RoPE, SwiGLU, RMSNorm, SE-Conv, Stochastic Depth "
+            "and intermediate CTC supervision, paired with a detachable KenLM "
+            "language head. Trained on 130K+ Egyptian Arabic audio samples with "
+            "code-switching support. This demo runs entirely on **CPU**.",
             elem_classes=["about-section"],
         )
 
@@ -734,7 +552,7 @@ with gr.Blocks(title="Metro-ASR") as demo:
 
     submit_btn.click(
         fn=transcribe,
-        inputs=[audio_input, model_dropdown, decoding_method, beam_width, lm_alpha, lm_beta],
+        inputs=[audio_input, decoding_method, beam_width, lm_alpha, lm_beta],
         outputs=[output_text, speed_badge, stats_output],
     )
 

@@ -8,30 +8,71 @@ import torch
 import numpy as np
 
 
+def load_unigrams_from_arpa(arpa_path, max_unigrams=2_000_000):
+    """
+    Read the \\1-grams section of an ARPA file as UTF-8.
+
+    pyctcdecode does this itself, but opens the file with the platform's
+    default encoding — which mangles Arabic on any system where that is not
+    UTF-8 (every Windows install). Reading it here keeps decoding correct and
+    lets the decoder score word boundaries properly.
+    """
+    unigrams = set()
+    in_section = False
+    with open(arpa_path, "r", encoding="utf-8", errors="replace") as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith("\\1-grams:"):
+                in_section = True
+                continue
+            if line.startswith("\\") and in_section:
+                break
+            if not in_section or not line:
+                continue
+            parts = line.split("\t")
+            if len(parts) >= 2:
+                word = parts[1].strip()
+                if word and not (word.startswith("<") and word.endswith(">")):
+                    unigrams.add(word)
+            if len(unigrams) >= max_unigrams:
+                break
+    return unigrams
+
+
 class CTCBeamSearchDecoder:
     def __init__(self, tokenizer, lm_path=None, beam_width=20, alpha=0.5, beta=1.0):
+        from pyctcdecode import build_ctcdecoder
+
         self.tokenizer = tokenizer
         self.beam_width = beam_width
-        self.is_bpe = hasattr(tokenizer, '_sp') and tokenizer._sp is not None
 
         vocab = self._build_vocab()
 
         if lm_path:
-            from pyctcdecode import build_ctcdecoder
-            import kenlm
+            unigrams = None
+            if str(lm_path).lower().endswith(".arpa"):
+                unigrams = load_unigrams_from_arpa(lm_path)
             self.decoder = build_ctcdecoder(
                 labels=vocab,
                 kenlm_model_path=lm_path,
+                unigrams=unigrams,
                 alpha=alpha,
                 beta=beta,
             )
             self.has_lm = True
         else:
-            from pyctcdecode import build_ctcdecoder
             self.decoder = build_ctcdecoder(labels=vocab)
             self.has_lm = False
 
     def _build_vocab(self):
+        """
+        Model-id-ordered labels for pyctcdecode.
+
+        SentencePiece pieces keep their leading "▁" so pyctcdecode detects a
+        subword vocabulary and merges pieces into words before scoring them
+        against the n-gram LM. Duplicate labels would be ambiguous, so
+        collisions are given a unique placeholder.
+        """
         vocab = []
         seen = set()
         for i in range(self.tokenizer.vocab_size):
@@ -41,16 +82,8 @@ class CTCBeamSearchDecoder:
                 token = "⁇"
             elif i == self.tokenizer.pad_id:
                 token = "⁈"
-            elif hasattr(self.tokenizer, 'id_to_token'):
-                token = self.tokenizer.id_to_token.get(i, "")
-            elif hasattr(self.tokenizer, '_sp') and self.tokenizer._sp is not None:
-                sp_id = i - 3
-                if 0 <= sp_id < self.tokenizer._sp.GetPieceSize():
-                    token = self.tokenizer._sp.IdToPiece(sp_id)
-                else:
-                    token = ""
             else:
-                token = ""
+                token = self.tokenizer.id_to_piece(i)
 
             if token in seen and token != "":
                 token = f"<dup_{i}>"

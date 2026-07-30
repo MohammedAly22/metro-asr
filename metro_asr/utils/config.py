@@ -28,8 +28,8 @@ def load_config(config_path):
             "win_length": 400,
         },
         "tokenizer": {
-            "type": "char",
-            "vocab_size": 128,
+            "type": "bpe",
+            "vocab_size": 5000,
         },
         "training": {
             "batch_size": 32,

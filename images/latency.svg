@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 560" width="1060" height="560"
+     font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg4" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B0F17"/>
+      <stop offset="100%" stop-color="#0E1420"/>
+    </linearGradient>
+    <linearGradient id="acc4" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#E8232A"/>
+      <stop offset="100%" stop-color="#FF5A60"/>
+    </linearGradient>
+    <linearGradient id="barG" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#8E1015"/>
+      <stop offset="100%" stop-color="#FF5A60"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1060" height="560" fill="url(#bg4)"/>
+
+  <rect x="50" y="30" width="4" height="22" rx="2" fill="url(#acc4)"/>
+  <text x="68" y="48" fill="#E8EDF5" font-size="20" font-weight="700">Measured CPU latency — Metro-Small (61.6 M)</text>
+  <text x="68" y="70" fill="#8A99B3" font-size="12.5">Intel Core Ultra 7 155H · 4 threads · PyTorch 2.13 CPU · fp32 · min of 15 runs · greedy decoding</text>
+
+  <!-- ================= chart 1: latency bars ================= -->
+  <text x="68" y="110" fill="#5D6B85" font-size="11" font-weight="700" letter-spacing="1.5">WALL-CLOCK LATENCY (ms)</text>
+
+  <!-- axes -->
+  <line x1="120" y1="130" x2="120" y2="330" stroke="#26314A" stroke-width="1.2"/>
+  <line x1="120" y1="330" x2="1000" y2="330" stroke="#26314A" stroke-width="1.2"/>
+
+  <!-- gridlines: 0..700ms over 200px -> 1ms = 0.2857px -->
+  <line x1="120" y1="330" x2="1000" y2="330" stroke="#1B2334"/>
+  <text x="112" y="334" fill="#5D6B85" font-size="10.5" text-anchor="end">0</text>
+  <line x1="120" y1="273" x2="1000" y2="273" stroke="#1B2334" stroke-dasharray="3 4"/>
+  <text x="112" y="277" fill="#5D6B85" font-size="10.5" text-anchor="end">200</text>
+  <line x1="120" y1="216" x2="1000" y2="216" stroke="#1B2334" stroke-dasharray="3 4"/>
+  <text x="112" y="220" fill="#5D6B85" font-size="10.5" text-anchor="end">400</text>
+  <line x1="120" y1="159" x2="1000" y2="159" stroke="#1B2334" stroke-dasharray="3 4"/>
+  <text x="112" y="163" fill="#5D6B85" font-size="10.5" text-anchor="end">600</text>
+
+  <!-- bars: 8 groups. slot width 110, bar width 46, centered -->
+  <!-- 1s: 36.6ms -> h=10.5 -->
+  <rect x="149" y="319.5" width="52" height="10.5" rx="3" fill="url(#barG)"/>
+  <text x="175" y="311" fill="#C7D2E4" font-size="11" text-anchor="middle">37</text>
+  <text x="175" y="350" fill="#8A99B3" font-size="12" text-anchor="middle">1 s</text>
+  <text x="175" y="368" fill="#5BC98D" font-size="11" text-anchor="middle">27×</text>
+
+  <!-- 2s: 57.1 -> 16.3 -->
+  <rect x="259" y="313.7" width="52" height="16.3" rx="3" fill="url(#barG)"/>
+  <text x="285" y="305" fill="#C7D2E4" font-size="11" text-anchor="middle">57</text>
+  <text x="285" y="350" fill="#8A99B3" font-size="12" text-anchor="middle">2 s</text>
+  <text x="285" y="368" fill="#5BC98D" font-size="11" text-anchor="middle">35×</text>
+
+  <!-- 3s: 67.9 -> 19.4 -->
+  <rect x="369" y="310.6" width="52" height="19.4" rx="3" fill="url(#barG)"/>
+  <text x="395" y="302" fill="#C7D2E4" font-size="11" text-anchor="middle">68</text>
+  <text x="395" y="350" fill="#8A99B3" font-size="12" text-anchor="middle">3 s</text>
+  <text x="395" y="368" fill="#5BC98D" font-size="11" text-anchor="middle">44×</text>
+
+  <!-- 5s: 99.0 -> 28.3 -->
+  <rect x="479" y="301.7" width="52" height="28.3" rx="3" fill="url(#barG)"/>
+  <text x="505" y="293" fill="#C7D2E4" font-size="11" text-anchor="middle">99</text>
+  <text x="505" y="350" fill="#8A99B3" font-size="12" text-anchor="middle">5 s</text>
+  <text x="505" y="368" fill="#5BC98D" font-size="11" text-anchor="middle">51×</text>
+
+  <!-- 10s: 180.7 -> 51.6 -->
+  <rect x="589" y="278.4" width="52" height="51.6" rx="3" fill="url(#barG)"/>
+  <text x="615" y="270" fill="#C7D2E4" font-size="11" text-anchor="middle">181</text>
+  <text x="615" y="350" fill="#8A99B3" font-size="12" text-anchor="middle">10 s</text>
+  <text x="615" y="368" fill="#5BC98D" font-size="11" text-anchor="middle" font-weight="700">55×</text>
+
+  <!-- 15s: 321.3 -> 91.8 -->
+  <rect x="699" y="238.2" width="52" height="91.8" rx="3" fill="url(#barG)"/>
+  <text x="725" y="230" fill="#C7D2E4" font-size="11" text-anchor="middle">321</text>
+  <text x="725" y="350" fill="#8A99B3" font-size="12" text-anchor="middle">15 s</text>
+  <text x="725" y="368" fill="#5BC98D" font-size="11" text-anchor="middle">47×</text>
+
+  <!-- 20s: 422.7 -> 120.8 -->
+  <rect x="809" y="209.2" width="52" height="120.8" rx="3" fill="url(#barG)"/>
+  <text x="835" y="201" fill="#C7D2E4" font-size="11" text-anchor="middle">423</text>
+  <text x="835" y="350" fill="#8A99B3" font-size="12" text-anchor="middle">20 s</text>
+  <text x="835" y="368" fill="#5BC98D" font-size="11" text-anchor="middle">47×</text>
+
+  <!-- 30s: 686.2 -> 196.1 -->
+  <rect x="919" y="133.9" width="52" height="196.1" rx="3" fill="url(#barG)"/>
+  <text x="945" y="126" fill="#C7D2E4" font-size="11" text-anchor="middle">686</text>
+  <text x="945" y="350" fill="#8A99B3" font-size="12" text-anchor="middle">30 s</text>
+  <text x="945" y="368" fill="#5BC98D" font-size="11" text-anchor="middle">44×</text>
+
+  <text x="68" y="352" fill="#5D6B85" font-size="11">audio length</text>
+  <text x="68" y="370" fill="#5BC98D" font-size="11">real-time factor</text>
+
+  <!-- ================= chart 2: RTF curve ================= -->
+  <text x="68" y="418" fill="#5D6B85" font-size="11" font-weight="700" letter-spacing="1.5">REAL-TIME FACTOR (lower is faster)</text>
+
+  <line x1="120" y1="434" x2="120" y2="512" stroke="#26314A" stroke-width="1.2"/>
+  <line x1="120" y1="512" x2="1000" y2="512" stroke="#26314A" stroke-width="1.2"/>
+  <text x="112" y="516" fill="#5D6B85" font-size="10.5" text-anchor="end">0.00</text>
+  <line x1="120" y1="473" x2="1000" y2="473" stroke="#1B2334" stroke-dasharray="3 4"/>
+  <text x="112" y="477" fill="#5D6B85" font-size="10.5" text-anchor="end">0.02</text>
+  <line x1="120" y1="434" x2="1000" y2="434" stroke="#1B2334" stroke-dasharray="3 4"/>
+  <text x="112" y="438" fill="#5D6B85" font-size="10.5" text-anchor="end">0.04</text>
+
+  <!-- rtf: .0366 .0285 .0226 .0198 .0181 .0214 .0211 .0229 ; y = 512 - rtf*1950 -->
+  <polyline points="175,440.6 285,456.4 395,467.9 505,473.4 615,476.7 725,470.3 835,470.9 945,467.4"
+            fill="none" stroke="#FF5A60" stroke-width="2.2"/>
+  <circle cx="175" cy="440.6" r="4" fill="#0B0F17" stroke="#FF5A60" stroke-width="2"/>
+  <circle cx="285" cy="456.4" r="4" fill="#0B0F17" stroke="#FF5A60" stroke-width="2"/>
+  <circle cx="395" cy="467.9" r="4" fill="#0B0F17" stroke="#FF5A60" stroke-width="2"/>
+  <circle cx="505" cy="473.4" r="4" fill="#0B0F17" stroke="#FF5A60" stroke-width="2"/>
+  <circle cx="615" cy="476.7" r="4.5" fill="#5BC98D" stroke="#0B0F17" stroke-width="2"/>
+  <circle cx="725" cy="470.3" r="4" fill="#0B0F17" stroke="#FF5A60" stroke-width="2"/>
+  <circle cx="835" cy="470.9" r="4" fill="#0B0F17" stroke="#FF5A60" stroke-width="2"/>
+  <circle cx="945" cy="467.4" r="4" fill="#0B0F17" stroke="#FF5A60" stroke-width="2"/>
+
+  <text x="615" y="497" fill="#5BC98D" font-size="11" text-anchor="middle">best 0.018</text>
+
+  <text x="68" y="543" fill="#5D6B85" font-size="11.5">Cost per frame is flat until attention&#8217;s O(T²) term starts to bite past ~10 s, which is why the curve dips and then slowly rises again.</text>
+</svg>

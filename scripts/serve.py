@@ -37,14 +37,17 @@ import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from metro_asr.utils import enable_utf8_stdout
+
+enable_utf8_stdout()
+
 # ========================= CONFIGURATION =========================
-MODEL_SIZE = "small"
-CONFIG_PATH = "configs/metro_small.yaml"
-CHECKPOINT_PATH = "checkpoints/metro-small-v2/best_model.pt"
-TOKENIZER_DIR = "tokenizer_bpe5k_v2"
+# A local directory (config.yaml + model.pt + bpe.model), a size alias
+# ("small"), or a HuggingFace repo id.
+MODEL = "checkpoints"
 DEVICE = "cpu"
 
-LM_PATH = None
+LM_PATH = "auto"   # "auto" = use a KenLM binary next to the checkpoint; None = greedy only
 BEAM_WIDTH = 100
 LM_ALPHA = 0.5
 LM_BETA = 5.0
@@ -63,12 +66,10 @@ engine = None
 
 def load_engine():
     global engine
-    print(f"Loading Metro-ASR ({MODEL_SIZE})...")
+    print(f"Loading Metro-ASR ({MODEL})...")
 
-    engine = MetroASREngine.from_local(
-        config_path=CONFIG_PATH,
-        checkpoint_path=CHECKPOINT_PATH,
-        tokenizer_dir=TOKENIZER_DIR,
+    engine = MetroASREngine.from_pretrained(
+        MODEL,
         device=DEVICE,
         lm_path=LM_PATH,
         beam_width=BEAM_WIDTH,
@@ -77,7 +78,7 @@ def load_engine():
     )
 
     print(f"  Model loaded: {engine.param_count:,} params on {DEVICE}")
-    print(f"  LM: {'loaded' if engine._beam_decoder else 'none'}")
+    print(f"  LM: {'loaded' if engine.has_lm else 'none'}")
     print(f"  Server: http://{HOST}:{PORT}")
     print()
 
@@ -155,11 +156,11 @@ def health():
 @app.route("/info", methods=["GET"])
 def info():
     return jsonify({
-        "model_size": MODEL_SIZE,
+        "model": MODEL,
         "params": engine.param_count,
         "device": str(engine.device),
         "sample_rate": engine.sample_rate,
-        "lm_loaded": engine._beam_decoder is not None,
+        "lm_loaded": engine.has_lm,
     })
 
 

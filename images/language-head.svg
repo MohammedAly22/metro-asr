@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 600" width="1060" height="600"
+     font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B0F17"/>
+      <stop offset="100%" stop-color="#0E1420"/>
+    </linearGradient>
+    <linearGradient id="acc3" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#E8232A"/>
+      <stop offset="100%" stop-color="#FF5A60"/>
+    </linearGradient>
+    <linearGradient id="amb3" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#F5A524"/>
+      <stop offset="100%" stop-color="#FFC65C"/>
+    </linearGradient>
+    <marker id="a3r" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#E8232A"/>
+    </marker>
+    <marker id="a3a" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#F5A524"/>
+    </marker>
+    <marker id="a3n" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#4A5878"/>
+    </marker>
+  </defs>
+
+  <rect width="1060" height="600" fill="url(#bg3)"/>
+
+  <rect x="50" y="32" width="4" height="22" rx="2" fill="url(#acc3)"/>
+  <text x="68" y="50" fill="#E8EDF5" font-size="20" font-weight="700">The detachable language head</text>
+  <text x="68" y="72" fill="#8A99B3" font-size="13">Adapt the model to a new domain with text alone — no audio, no GPU, no retraining of the acoustic core</text>
+
+  <!-- ===== ACOUSTIC PATH (frozen) ===== -->
+  <rect x="50" y="106" width="470" height="196" rx="13" fill="#141019" stroke="#4A2027"/>
+  <text x="72" y="132" fill="#FF8A8F" font-size="12" font-weight="700" letter-spacing="1.4">ACOUSTIC CORE — TRAINED ONCE</text>
+
+  <rect x="72" y="148" width="120" height="52" rx="9" fill="#1B1114" stroke="#7A1D22"/>
+  <text x="132" y="171" fill="#E8EDF5" font-size="12.5" text-anchor="middle" font-weight="600">Audio corpus</text>
+  <text x="132" y="189" fill="#8A99B3" font-size="11" text-anchor="middle">130K+ clips</text>
+
+  <path d="M192,174 L222,174" stroke="#E8232A" stroke-width="1.6" marker-end="url(#a3r)"/>
+
+  <rect x="226" y="148" width="130" height="52" rx="9" fill="#1B1114" stroke="#7A1D22"/>
+  <text x="291" y="171" fill="#E8EDF5" font-size="12.5" text-anchor="middle" font-weight="600">Conformer + CTC</text>
+  <text x="291" y="189" fill="#8A99B3" font-size="11" text-anchor="middle">days on GPU</text>
+
+  <path d="M356,174 L386,174" stroke="#E8232A" stroke-width="1.6" marker-end="url(#a3r)"/>
+
+  <rect x="390" y="148" width="108" height="52" rx="9" fill="#1B1114" stroke="#7A1D22"/>
+  <text x="444" y="171" fill="#E8EDF5" font-size="12.5" text-anchor="middle" font-weight="600">model.pt</text>
+  <text x="444" y="189" fill="#8A99B3" font-size="11" text-anchor="middle">frozen</text>
+
+  <text x="72" y="232" fill="#8A99B3" font-size="12">Emits per-frame log-probabilities over the BPE vocabulary.</text>
+  <text x="72" y="252" fill="#8A99B3" font-size="12">It has learned what the audio <tspan font-style="italic">sounds</tspan> like — nothing about your</text>
+  <text x="72" y="272" fill="#8A99B3" font-size="12">product names, drug names, station names or ticker symbols.</text>
+  <text x="72" y="292" fill="#5D6B85" font-size="11.5">You never touch this again.</text>
+
+  <!-- ===== TEXT PATH (cheap, repeatable) ===== -->
+  <rect x="546" y="106" width="470" height="196" rx="13" fill="#191510" stroke="#5C3D14"/>
+  <text x="568" y="132" fill="#F5A524" font-size="12" font-weight="700" letter-spacing="1.4">LANGUAGE HEAD — RETRAIN ANY TIME</text>
+
+  <rect x="568" y="148" width="120" height="52" rx="9" fill="#1C1710" stroke="#8A5A1E"/>
+  <text x="628" y="171" fill="#E8EDF5" font-size="12.5" text-anchor="middle" font-weight="600">Text corpus</text>
+  <text x="628" y="189" fill="#8A99B3" font-size="11" text-anchor="middle">plain .txt lines</text>
+
+  <path d="M688,174 L718,174" stroke="#F5A524" stroke-width="1.6" marker-end="url(#a3a)"/>
+
+  <rect x="722" y="148" width="130" height="52" rx="9" fill="#1C1710" stroke="#8A5A1E"/>
+  <text x="787" y="171" fill="#E8EDF5" font-size="12.5" text-anchor="middle" font-weight="600">KenLM lmplz</text>
+  <text x="787" y="189" fill="#8A99B3" font-size="11" text-anchor="middle">minutes on CPU</text>
+
+  <path d="M852,174 L882,174" stroke="#F5A524" stroke-width="1.6" marker-end="url(#a3a)"/>
+
+  <rect x="886" y="148" width="108" height="52" rx="9" fill="#1C1710" stroke="#8A5A1E"/>
+  <text x="940" y="171" fill="#E8EDF5" font-size="12.5" text-anchor="middle" font-weight="600">lm.bin</text>
+  <text x="940" y="189" fill="#8A99B3" font-size="11" text-anchor="middle">swappable</text>
+
+  <text x="568" y="232" fill="#8A99B3" font-size="12">Scores which <tspan font-style="italic">word sequences</tspan> are plausible in your domain.</text>
+  <text x="568" y="252" fill="#8A99B3" font-size="12">Needs no recordings and no transcripts — a scrape of your docs,</text>
+  <text x="568" y="272" fill="#8A99B3" font-size="12">tickets or catalogue is enough.</text>
+  <text x="568" y="292" fill="#5D6B85" font-size="11.5">Rebuild it as often as your vocabulary changes.</text>
+
+  <!-- ===== merge ===== -->
+  <path d="M285,302 L285,352 L533,352" stroke="#E8232A" stroke-width="1.6" fill="none"/>
+  <path d="M781,302 L781,352 L533,352" stroke="#F5A524" stroke-width="1.6" fill="none"/>
+  <path d="M533,352 L533,378" stroke="#4A5878" stroke-width="1.8" marker-end="url(#a3n)"/>
+
+  <rect x="330" y="384" width="406" height="62" rx="11" fill="#131A26" stroke="#33405E"/>
+  <text x="533" y="410" fill="#E8EDF5" font-size="14" font-weight="600" text-anchor="middle">Beam search — shallow fusion</text>
+  <text x="533" y="431" fill="#8A99B3" font-size="12" text-anchor="middle" font-family="ui-monospace, Consolas, monospace">score = log P(acoustic) + α · log P(LM) + β · |words|</text>
+
+  <path d="M533,446 L533,472" stroke="#4A5878" stroke-width="1.8" marker-end="url(#a3n)"/>
+  <rect x="404" y="478" width="258" height="42" rx="9" fill="#0F1D17" stroke="#2C5C43"/>
+  <text x="533" y="504" fill="#5BC98D" font-size="13" font-weight="600" text-anchor="middle">Domain-adapted transcript</text>
+
+  <!-- footer note -->
+  <rect x="50" y="546" width="966" height="34" rx="9" fill="#131A26" stroke="#26314A"/>
+  <text x="70" y="568" fill="#8A99B3" font-size="12">Many heads, one acoustic core: ship a medical head and a call-centre head from the same 61.6 M-parameter checkpoint, and swap between them at runtime with <tspan fill="#FF8A8F" font-family="ui-monospace, Consolas, monospace">engine.load_lm()</tspan></text>
+</svg>

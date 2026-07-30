@@ -6,6 +6,10 @@ import torch.distributed as dist
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from metro_asr.utils import enable_utf8_stdout
+
+enable_utf8_stdout()
+
 from metro_asr.utils.config import load_config
 from metro_asr.utils.logger import get_logger, print_banner, print_config_summary
 from metro_asr.model.metro import MetroASR
@@ -14,9 +18,9 @@ from metro_asr.data.dataset import MetroASRDataset, load_hf_datasets
 from metro_asr.training.trainer import MetroTrainer
 
 # ========================= CONFIGURATION =========================
-CONFIG_PATH = "configs/metro_small.yaml"
-TOKENIZER_DIR = "tokenizer_bpe5k_v2"
-PREPARED_DATA_DIR = "data_prepared_v2"
+CONFIG_PATH = "configs/metro_small.yaml"     # metro_small / metro_medium / metro_large
+TOKENIZER_DIR = "tokenizer_bpe5k"            # directory holding bpe.model
+PREPARED_DATA_DIR = "data_prepared"          # output of scripts/prepare_data.py
 GPU = None  # GPU device index (None = auto), overridden by --gpu flag
 # =================================================================
 
