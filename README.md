@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://pypi.org/project/metro-asr/"><img src="https://img.shields.io/pypi/v/metro-asr?style=flat-square&logo=pypi&logoColor=white&color=E8232A" alt="PyPI"></a>
   <a href="https://huggingface.co/MohammedAly22"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20HuggingFace-Models-E8232A?style=flat-square" alt="HuggingFace"></a>
-  <a href="https://mohammedaly22.github.io/Metro-ASR/report.html"><img src="https://img.shields.io/badge/%F0%9F%94%8A_Demo-Listen%20%26%20Compare-E8232A?style=flat-square" alt="Demo Report"></a>
+  <a href="https://mohammedaly22.github.io/Metro-ASR/index.html"><img src="https://img.shields.io/badge/%F0%9F%94%8A_Demo-Listen%20%26%20Compare-E8232A?style=flat-square" alt="Demo Report"></a>
   <img src="https://img.shields.io/badge/Python-3.9%2B-E8232A?style=flat-square&logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/License-MIT-E8232A?style=flat-square" alt="License">
   <img src="https://img.shields.io/badge/Params-61.6M-E8232A?style=flat-square" alt="Parameters">
