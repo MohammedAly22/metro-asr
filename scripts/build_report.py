@@ -4,7 +4,10 @@ Render docs/results.json into a self-contained HTML report.
 Audio is embedded as base64 data URIs so the file can be opened from disk,
 emailed, or dropped on a static host with no other assets.
 
-    python scripts/build_report.py --results docs/results.json --out docs/report.html
+    python scripts/build_report.py --results docs/results.json --out docs/index.html
+
+The output is named index.html (not report.html) so it serves as the site root when published
+via GitHub Pages from the /docs folder — see docs/DEPLOYMENT.md.
 """
 
 import argparse
@@ -234,7 +237,7 @@ def fmt_cell(v, best, lower_is_better=True):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--results", default="docs/results.json")
-    ap.add_argument("--out", default="docs/report.html")
+    ap.add_argument("--out", default="docs/index.html")
     ap.add_argument("--embed-audio", action="store_true",
                     help="inline audio as base64 so the file stands alone (large). "
                          "Default links to ../test_samples/, which keeps the file small.")
