@@ -11,8 +11,10 @@
 
 <p align="center">
   <a href="https://pypi.org/project/metro-asr/"><img src="https://img.shields.io/pypi/v/metro-asr?style=flat-square&logo=pypi&logoColor=white&color=E8232A" alt="PyPI"></a>
-  <a href="https://huggingface.co/MohammedAly22"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20HuggingFace-Models-E8232A?style=flat-square" alt="HuggingFace"></a>
-  <a href="https://mohammedaly22.github.io/metro-asr/"><img src="https://img.shields.io/badge/%F0%9F%94%8A_Demo-Listen%20%26%20Compare-E8232A?style=flat-square" alt="Demo Report"></a>
+  <a href="https://huggingface.co/mohammedaly22/Metro-ASR-Small"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Model-Metro--ASR--Small-E8232A?style=flat-square" alt="HuggingFace Model"></a>
+  <a href="https://huggingface.co/spaces/mohammedaly22/metro-asr"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Space-Live%20Demo-E8232A?style=flat-square" alt="HuggingFace Space"></a>
+  <a href="https://mohammedaly22.github.io/metro-asr/"><img src="https://img.shields.io/badge/%F0%9F%94%8A_Report-Listen%20%26%20Compare-E8232A?style=flat-square" alt="Demo Report"></a>
+  <a href="https://colab.research.google.com/github/MohammedAly22/metro-asr/blob/main/examples/quick_start.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"></a>
   <img src="https://img.shields.io/badge/Python-3.9%2B-E8232A?style=flat-square&logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/License-MIT-E8232A?style=flat-square" alt="License">
   <img src="https://img.shields.io/badge/Params-61.6M-E8232A?style=flat-square" alt="Parameters">
@@ -1345,6 +1347,23 @@ METRO_MODEL=checkpoints METRO_LM=auto METRO_PORT=7860 python app.py
 
 Two tabs: file upload or recording with decoder controls and live metrics, and a microphone tab that
 re-transcribes a growing buffer as you speak.
+
+---
+
+## Examples
+
+Runnable end-to-end in Colab — installs the package, downloads what it needs from HuggingFace, no
+local setup required.
+
+| Notebook | Covers | |
+|---|---|---|
+| [`quick_start.ipynb`](examples/quick_start.ipynb) | Install → transcribe in 3 lines → beam search + LM → batch → every field on the result | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MohammedAly22/metro-asr/blob/main/examples/quick_start.ipynb) |
+| [`gradio_app.ipynb`](examples/gradio_app.ipynb) | The full `app.py` web UI, and a minimal inline alternative, both with a public share link | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MohammedAly22/metro-asr/blob/main/examples/gradio_app.ipynb) |
+| [`streaming_server.ipynb`](examples/streaming_server.ipynb) | REST API (backgrounded + polled from the same notebook), chunked streaming, curl/Postman | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MohammedAly22/metro-asr/blob/main/examples/streaming_server.ipynb) |
+| [`fine_tuning.ipynb`](examples/fine_tuning.ipynb) | Download the checkpoint → fine-tune on HF or local data → train a domain LM head → train a tokenizer | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MohammedAly22/metro-asr/blob/main/examples/fine_tuning.ipynb) |
+
+`fine_tuning.ipynb` needs a GPU runtime (*Runtime → Change runtime type → T4 GPU*); the other three
+run fine on Colab's default CPU runtime.
 
 ---
 
