@@ -364,6 +364,14 @@ def load_hf_datasets(
             print(f"❌ Skipping {ds_name}: column(s) not found — audio={ac!r}, text={tc!r}, available={combined.column_names}")
             continue
 
+        # Drop any pre-existing "audio"/"text" columns that aren't the ones we picked —
+        # e.g. a dataset with both `text` and `cleaned_text` would otherwise make
+        # rename_column("cleaned_text", "text") fail because "text" is already taken.
+        if ac != "audio" and "audio" in combined.column_names:
+            combined = combined.remove_columns(["audio"])
+        if tc != "text" and "text" in combined.column_names:
+            combined = combined.remove_columns(["text"])
+
         if ac != "audio":
             combined = combined.rename_column(ac, "audio")
         if tc != "text":
