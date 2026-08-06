@@ -54,6 +54,34 @@ def _first_existing(directory: str, filenames) -> Optional[str]:
     return None
 
 
+def _build_beam_decoder(tokenizer, lm_path, beam_width, alpha, beta, strict):
+    """
+    Construct a CTCBeamSearchDecoder, or handle a missing `pyctcdecode`/`kenlm`
+    install depending on how this LM was requested.
+
+    `lm_path="auto"` is the default nearly everywhere (app.py, scripts/serve.py,
+    every from_pretrained example in the README) — it should degrade to greedy
+    with a clear warning if the `[lm]` extra isn't installed, not take down the
+    whole engine. `load_lm()` is different: the caller explicitly asked for this
+    exact file, so a missing dependency should raise with a clear fix rather
+    than silently do nothing.
+    """
+    try:
+        return CTCBeamSearchDecoder(
+            tokenizer, lm_path=lm_path, beam_width=beam_width, alpha=alpha, beta=beta,
+        )
+    except ImportError as exc:
+        message = (
+            f"Language model at '{lm_path}' found, but beam search decoding needs "
+            "the `lm` extra: `pip install metro-asr[lm]`."
+        )
+        if strict:
+            raise ImportError(message) from exc
+        import warnings
+        warnings.warn(f"{message} Falling back to greedy decoding.", stacklevel=3)
+        return None
+
+
 @dataclass
 class TranscriptionResult:
     text: str
@@ -128,12 +156,8 @@ class MetroASREngine:
         self._lm_beta = lm_beta
 
         if lm_path and os.path.exists(lm_path):
-            self._beam_decoder = CTCBeamSearchDecoder(
-                tokenizer,
-                lm_path=lm_path,
-                beam_width=beam_width,
-                alpha=lm_alpha,
-                beta=lm_beta,
+            self._beam_decoder = _build_beam_decoder(
+                tokenizer, lm_path, beam_width, lm_alpha, lm_beta, strict=False,
             )
 
     @classmethod
@@ -536,17 +560,13 @@ class MetroASREngine:
         b = lm_beta if lm_beta is not None else self._lm_beta
 
         if lm_path and lm_path != self._lm_path:
-            return CTCBeamSearchDecoder(
-                self.tokenizer, lm_path=lm, beam_width=bw, alpha=a, beta=b,
-            )
+            return _build_beam_decoder(self.tokenizer, lm, bw, a, b, strict=False)
 
         if self._beam_decoder is not None:
             return self._beam_decoder
 
         if lm and os.path.exists(lm):
-            self._beam_decoder = CTCBeamSearchDecoder(
-                self.tokenizer, lm_path=lm, beam_width=bw, alpha=a, beta=b,
-            )
+            self._beam_decoder = _build_beam_decoder(self.tokenizer, lm, bw, a, b, strict=False)
             return self._beam_decoder
 
         return None
@@ -588,12 +608,9 @@ class MetroASREngine:
         if lm_beta is not None:
             self._lm_beta = lm_beta
 
-        self._beam_decoder = CTCBeamSearchDecoder(
-            self.tokenizer,
-            lm_path=self._lm_path,
-            beam_width=self._beam_width,
-            alpha=self._lm_alpha,
-            beta=self._lm_beta,
+        self._beam_decoder = _build_beam_decoder(
+            self.tokenizer, self._lm_path, self._beam_width, self._lm_alpha, self._lm_beta,
+            strict=True,
         )
         return self
 

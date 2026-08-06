@@ -321,12 +321,18 @@ Metro-ASR needs Python 3.9+ and works on CPU with no CUDA toolkit installed.
 
 ```bash
 pip install metro-asr                     # core: inference, greedy decoding
-pip install "metro-asr[lm]"               # + KenLM beam search
+pip install "metro-asr[lm]"               # + KenLM beam search — see the note below
 pip install "metro-asr[server]"           # + Flask REST API
 pip install "metro-asr[demo]"             # + Gradio web UI
 pip install "metro-asr[train]"            # + datasets, wandb, jiwer, librosa
 pip install "metro-asr[all]"              # everything except dev tools
 ```
+
+> [!NOTE]
+> Installing the `[lm]` extra on a machine that already has numpy 2.x (Colab, most fresh
+> environments today) will downgrade numpy and can break other already-installed packages. Run
+> `pip install -U "numpy>=2.0"` right after. Full explanation in
+> [Installing KenLM](#installing-kenlm).
 
 For a CUDA build of PyTorch, install it from PyTorch's index *first*, then Metro-ASR:
 
@@ -364,6 +370,18 @@ pip install "metro-asr[lm]"
 sudo apt-get install -y build-essential cmake libboost-all-dev libeigen3-dev   # Debian/Ubuntu
 pip install https://github.com/kpu/kenlm/archive/master.zip
 ```
+
+> [!WARNING]
+> `pyctcdecode`'s only release on PyPI (0.5.0) declares `numpy<2.0.0` in its own metadata —
+> even though its code runs fine under numpy 2.x, which we've verified directly. `pip install
+> "metro-asr[lm]"` will honor that and downgrade numpy for you. On a machine that already had
+> numpy 2.x and other packages built against it (Colab is exactly this: jax, opencv and the
+> scipy stack all come pre-installed against numpy 2.x), that downgrade breaks those packages'
+> compiled extensions — the symptom is `ValueError: numpy.dtype size changed, may indicate
+> binary incompatibility` on your *next* import of anything, not of `metro-asr` itself. Fix:
+> `pip install -U "numpy>=2.0"` right after installing the `[lm]` extra. If you don't have the
+> `[lm]` extra installed at all, `lm_path="auto"` now degrades to greedy with a warning instead
+> of failing — see [Troubleshooting](#troubleshooting).
 
 That covers *using* a language head. **Training** one is where it usually gets awkward: KenLM's
 `lmplz` and `build_binary` are command-line binaries that are not part of the Python package, and
@@ -430,6 +448,31 @@ back to automatically: `pip install librosa`. Or convert first:
 `pyctcdecode` can extract a unigram list from an ARPA file but not from a compiled `.bin`. Decoding
 still works; word-boundary scoring is slightly less precise. Pass the `.arpa` instead of the `.bin` if
 you want the warning gone and can afford the larger file.
+
+</details>
+
+<details>
+<summary><strong><code>ValueError: numpy.dtype size changed, may indicate binary incompatibility</code></strong></summary>
+
+You installed `metro-asr[lm]` (or anything that pulls in `pyctcdecode`) on a machine that already had
+numpy 2.x and other packages compiled against it. `pyctcdecode`'s metadata still says `numpy<2.0.0`,
+so pip downgrades numpy to satisfy it — and every other already-installed package that was built
+against numpy 2.x now has a mismatched ABI. Fix: `pip install -U "numpy>=2.0"` after installing the
+`[lm]` extra; `pyctcdecode`'s own code runs fine under numpy 2.x despite what its metadata claims.
+See the warning in [Installing KenLM](#installing-kenlm).
+
+</details>
+
+<details>
+<summary><strong>Beam search silently doesn't happen, or engine construction raises <code>ImportError</code></strong></summary>
+
+`lm_path="auto"` is the default nearly everywhere (`app.py`, `scripts/serve.py`, most examples in
+this README). If `pyctcdecode`/`kenlm` aren't installed, that default now degrades to greedy decoding
+with a `UserWarning` telling you to `pip install metro-asr[lm]`, rather than crashing engine
+construction — this was a real bug in versions before 0.3.1: any code path that resolved an LM file
+without the `[lm]` extra installed took the whole engine down, not just beam search. `load_lm()` is
+the one exception — since you're explicitly asking for a specific file there, a missing dependency
+raises `ImportError` with the same fix rather than failing silently.
 
 </details>
 

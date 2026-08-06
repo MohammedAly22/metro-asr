@@ -4,13 +4,20 @@
 # --- core (inference) ---
 torch>=2.0.0
 torchaudio>=2.0.0
-numpy<2.0.0
+numpy>=1.24.0
 pyyaml>=6.0
 sentencepiece>=0.1.99
 soundfile>=0.12.0
 huggingface_hub>=0.20.0
 
 # --- beam search + language head ---
+# pyctcdecode 0.5.0 (its latest release) declares numpy<2.0.0 in its own metadata,
+# even though its code runs fine under numpy 2.x (verified). Installing this extra
+# will make pip downgrade numpy to satisfy that stale constraint; if numpy 2.x was
+# already installed and other packages were built against it (e.g. on Colab), that
+# downgrade breaks their compiled extensions. Reinstall numpy>=2.0 afterwards if
+# you hit `ValueError: numpy.dtype size changed...` — see the README's
+# Troubleshooting section.
 pyctcdecode>=0.5.0
 kenlm
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "metro-asr"
-version = "0.3.0"
+version = "0.3.1"
 description = "Non-autoregressive speech recognition for Egyptian Arabic and code-switching, with a detachable n-gram language head"
 readme = "README.md"
 license = "MIT"
@@ -30,7 +30,7 @@ classifiers = [
 dependencies = [
     "torch>=2.0.0",
     "torchaudio>=2.0.0",
-    "numpy<2.0.0",
+    "numpy>=1.24.0",
     "pyyaml>=6.0",
     "sentencepiece>=0.1.99",
     "soundfile>=0.12.0",
