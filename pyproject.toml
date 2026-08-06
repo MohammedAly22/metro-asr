@@ -66,10 +66,11 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/MohammedAly22/Metro-ASR"
-Repository = "https://github.com/MohammedAly22/Metro-ASR"
-Documentation = "https://github.com/MohammedAly22/Metro-ASR#readme"
-Issues = "https://github.com/MohammedAly22/Metro-ASR/issues"
+Homepage = "https://github.com/MohammedAly22/metro-asr"
+Repository = "https://github.com/MohammedAly22/metro-asr"
+Documentation = "https://github.com/MohammedAly22/metro-asr#readme"
+Issues = "https://github.com/MohammedAly22/metro-asr/issues"
+Demo = "https://mohammedaly22.github.io/metro-asr/"
 HuggingFace = "https://huggingface.co/MohammedAly22"
 
 [tool.setuptools.packages.find]

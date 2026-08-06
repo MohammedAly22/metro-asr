@@ -336,7 +336,7 @@ pip install metro-asr
 ### From source
 
 ```bash
-git clone https://github.com/MohammedAly22/Metro-ASR.git
+git clone https://github.com/MohammedAly22/metro-asr.git
 cd Metro-ASR
 pip install -e .                          # or: pip install -e ".[dev]"
 ```
@@ -1486,7 +1486,7 @@ exact, but no weights exist.
             and Code-Switching with a Detachable N-gram Language Head},
   author = {Mohammed Aly},
   year   = {2025},
-  url    = {https://github.com/MohammedAly22/Metro-ASR}
+  url    = {https://github.com/MohammedAly22/metro-asr}
 }
 ```
 

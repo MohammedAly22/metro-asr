@@ -43,18 +43,23 @@ enable_utf8_stdout()
 
 # ========================= CONFIGURATION =========================
 # A local directory (config.yaml + model.pt + bpe.model), a size alias
-# ("small"), or a HuggingFace repo id.
-MODEL = "checkpoints"
-DEVICE = "cpu"
+# ("small"), or a HuggingFace repo id. Override with METRO_MODEL so this
+# script works unmodified wherever there is no local checkpoints/ directory
+# (a fresh clone, a hosted notebook, a container).
+MODEL = os.environ.get("METRO_MODEL", "checkpoints")
+DEVICE = os.environ.get("METRO_DEVICE", "cpu")
 
-LM_PATH = "auto"   # "auto" = use a KenLM binary next to the checkpoint; None = greedy only
-BEAM_WIDTH = 100
-LM_ALPHA = 0.5
-LM_BETA = 5.0
+LM_PATH = os.environ.get("METRO_LM", "auto")   # "auto" = KenLM binary next to the checkpoint; empty = greedy only
+BEAM_WIDTH = int(os.environ.get("METRO_BEAM_WIDTH", 100))
+LM_ALPHA = float(os.environ.get("METRO_LM_ALPHA", 0.5))
+LM_BETA = float(os.environ.get("METRO_LM_BETA", 5.0))
 
-HOST = "0.0.0.0"
-PORT = 8000
+HOST = os.environ.get("METRO_HOST", "0.0.0.0")
+PORT = int(os.environ.get("METRO_PORT", 8000))
 # =================================================================
+
+if not LM_PATH:
+    LM_PATH = None
 
 from flask import Flask, request, jsonify
 

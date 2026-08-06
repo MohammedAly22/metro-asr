@@ -1,3 +1,4 @@
+import argparse
 import os
 import sys
 import torch
@@ -16,7 +17,7 @@ from metro_asr.model.tokenizer import build_tokenizer
 from metro_asr.data.dataset import MetroASRDataset, load_hf_datasets
 from metro_asr.training.trainer import MetroTrainer
 
-# ─── Configuration ───────────────────────────────────────────────────────────
+# ─── Defaults — override any of these with a CLI flag instead of editing this file ───
 CONFIG_PATH = "configs/metro_small.yaml"
 TOKENIZER_DIR = "checkpoints"                        # directory holding bpe.model
 PRETRAINED_CHECKPOINT = "checkpoints/model.pt"       # weights to start from
@@ -31,6 +32,26 @@ PREPARED_DATA_DIR = None  # Set to path if you pre-prepared CS data, else loads 
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def parse_args():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--config", default=CONFIG_PATH)
+    p.add_argument("--tokenizer-dir", default=TOKENIZER_DIR)
+    p.add_argument("--checkpoint", default=PRETRAINED_CHECKPOINT,
+                   help="pretrained weights to start from")
+    p.add_argument("--dataset", default=FINETUNE_DATASET,
+                   help="HuggingFace dataset id, ignored if --prepared-data is set")
+    p.add_argument("--prepared-data", default=PREPARED_DATA_DIR,
+                   help="directory with train/ and eval/ splits, skips HF download")
+    p.add_argument("--lr", type=float, default=FINETUNE_LR)
+    p.add_argument("--max-steps", type=int, default=FINETUNE_MAX_STEPS)
+    p.add_argument("--warmup-steps", type=int, default=FINETUNE_WARMUP_STEPS)
+    p.add_argument("--freeze-steps", type=int, default=FREEZE_ENCODER_STEPS,
+                   help="0 disables the encoder freeze entirely")
+    p.add_argument("--run-suffix", default="cs-finetune",
+                   help="appended to checkpoint_dir and the wandb run name")
+    return p.parse_args()
+
+
 def setup_distributed():
     if "RANK" in os.environ and "WORLD_SIZE" in os.environ:
         rank = int(os.environ["RANK"])
@@ -42,18 +63,18 @@ def setup_distributed():
     return False
 
 
-def load_finetune_data(config, logger):
+def load_finetune_data(config, logger, dataset_id, prepared_data_dir):
     """Load the fine-tuning dataset (CS data from HuggingFace or prepared)."""
-    if PREPARED_DATA_DIR and os.path.exists(PREPARED_DATA_DIR):
+    if prepared_data_dir and os.path.exists(prepared_data_dir):
         from datasets import load_from_disk
-        logger.info(f"Loading prepared finetune data from {PREPARED_DATA_DIR}...")
-        train_path = os.path.join(PREPARED_DATA_DIR, "train")
-        eval_path = os.path.join(PREPARED_DATA_DIR, "eval")
+        logger.info(f"Loading prepared finetune data from {prepared_data_dir}...")
+        train_path = os.path.join(prepared_data_dir, "train")
+        eval_path = os.path.join(prepared_data_dir, "eval")
         return load_from_disk(train_path), load_from_disk(eval_path)
 
-    logger.info(f"Loading finetune dataset: {FINETUNE_DATASET}...")
+    logger.info(f"Loading finetune dataset: {dataset_id}...")
     dataset = load_hf_datasets(
-        [FINETUNE_DATASET],
+        [dataset_id],
         config,
         cache_dir=config["data"].get("cache_dir"),
     )
@@ -62,6 +83,7 @@ def load_finetune_data(config, logger):
 
 
 def main():
+    args = parse_args()
     distributed = setup_distributed()
     rank = dist.get_rank() if distributed else 0
     logger = get_logger("metro-asr")
@@ -70,21 +92,21 @@ def main():
         print_banner()
         logger.info("Fine-tuning mode — CS data")
 
-    config = load_config(CONFIG_PATH)
+    config = load_config(args.config)
 
-    config["training"]["learning_rate"] = FINETUNE_LR
-    config["training"]["max_steps"] = FINETUNE_MAX_STEPS
-    config["training"]["warmup_steps"] = FINETUNE_WARMUP_STEPS
-    config["training"]["resume_from"] = None  # Don't resume — we load weights via PRETRAINED_CHECKPOINT
-    config["training"]["checkpoint_dir"] = config["training"]["checkpoint_dir"].rstrip("/") + "-cs-finetune"
-    config["training"]["wandb_run_name"] = (config["training"].get("wandb_run_name") or "metro") + "-cs-finetune"
+    config["training"]["learning_rate"] = args.lr
+    config["training"]["max_steps"] = args.max_steps
+    config["training"]["warmup_steps"] = args.warmup_steps
+    config["training"]["resume_from"] = None  # Don't resume — we load weights via --checkpoint
+    config["training"]["checkpoint_dir"] = config["training"]["checkpoint_dir"].rstrip("/") + f"-{args.run_suffix}"
+    config["training"]["wandb_run_name"] = (config["training"].get("wandb_run_name") or "metro") + f"-{args.run_suffix}"
 
     if rank == 0:
         print_config_summary(config)
 
-    tokenizer = build_tokenizer(config, TOKENIZER_DIR)
+    tokenizer = build_tokenizer(config, args.tokenizer_dir)
 
-    train_data, eval_data = load_finetune_data(config, logger)
+    train_data, eval_data = load_finetune_data(config, logger, args.dataset, args.prepared_data)
     logger.info(f"  Train: {len(train_data)} samples")
     logger.info(f"  Eval:  {len(eval_data)} samples")
 
@@ -93,16 +115,16 @@ def main():
 
     model = MetroASR.from_config(config)
 
-    if os.path.exists(PRETRAINED_CHECKPOINT):
-        logger.info(f"Loading pretrained weights: {PRETRAINED_CHECKPOINT}")
-        ckpt = torch.load(PRETRAINED_CHECKPOINT, map_location="cpu", weights_only=False)
+    if os.path.exists(args.checkpoint):
+        logger.info(f"Loading pretrained weights: {args.checkpoint}")
+        ckpt = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
         model.load_state_dict(ckpt["model_state_dict"], strict=False)
     else:
-        logger.warning(f"Pretrained checkpoint not found: {PRETRAINED_CHECKPOINT}")
+        logger.warning(f"Pretrained checkpoint not found: {args.checkpoint}")
         logger.warning("  Training from scratch instead.")
 
-    if FREEZE_ENCODER_STEPS > 0:
-        logger.info(f"Freezing encoder for first {FREEZE_ENCODER_STEPS} steps")
+    if args.freeze_steps > 0:
+        logger.info(f"Freezing encoder for first {args.freeze_steps} steps")
         for param in model.encoder.parameters():
             param.requires_grad = False
         for param in model.subsampling.parameters():
@@ -118,7 +140,7 @@ def main():
     original_train = trainer.train
 
     def train_with_unfreeze(resume_from=None):
-        unfreeze_step = trainer.global_step + FREEZE_ENCODER_STEPS
+        unfreeze_step = trainer.global_step + args.freeze_steps
 
         original_step = trainer._train_step
 
@@ -134,7 +156,7 @@ def main():
         trainer._train_step = step_with_unfreeze
         original_train(resume_from)
 
-    if FREEZE_ENCODER_STEPS > 0:
+    if args.freeze_steps > 0:
         train_with_unfreeze()
     else:
         trainer.train()

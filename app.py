@@ -16,6 +16,12 @@ MODEL = os.environ.get("METRO_MODEL", "checkpoints")
 LM_PATH = os.environ.get("METRO_LM", "auto")
 
 SERVER_PORT = int(os.environ.get("METRO_PORT", 7860))
+
+# Colab, Kaggle and other hosted notebooks have no direct route to localhost, so
+# 0.0.0.0:PORT is unreachable there — set METRO_SHARE=true to get a public
+# gradio.live tunnel URL printed to stdout instead. Leave unset for local use.
+SHARE = os.environ.get("METRO_SHARE", "false").lower() == "true"
+
 STREAM_MIN_DURATION = 3.0
 STREAM_TARGET_SR = 16000
 # =================================================================
@@ -561,7 +567,7 @@ if __name__ == "__main__":
     demo.launch(
         server_name="0.0.0.0",
         server_port=SERVER_PORT,
-        share=False,
+        share=SHARE,
         theme=METRO_THEME,
         css=CSS,
         ssr_mode=False,
