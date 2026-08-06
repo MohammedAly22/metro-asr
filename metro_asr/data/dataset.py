@@ -276,7 +276,19 @@ class MetroASRDataset(Dataset):
         }
 
 
-def load_hf_datasets(dataset_names, config, cache_dir=None, streaming=False):
+def load_hf_datasets(
+    dataset_names, config, cache_dir=None, streaming=False,
+    audio_col=None, text_col=None, split=None,
+):
+    """Load and merge one or more HuggingFace datasets into a single {audio, text} dataset.
+
+    `audio_col`/`text_col`, when given, override auto-detection (and the
+    `DATASET_COLUMN_OVERRIDES` table) for every entry in `dataset_names`.
+    `split`, when given, is used for any entry that doesn't already embed its
+    own split via the "name:config:split" notation — e.g. with `split="train"`,
+    only that split is loaded (other splits such as "test" are left untouched
+    rather than being concatenated in).
+    """
     from datasets import load_dataset, concatenate_datasets, Audio
 
     target_sr = config["audio"]["sample_rate"]
@@ -288,7 +300,7 @@ def load_hf_datasets(dataset_names, config, cache_dir=None, streaming=False):
         parts = ds_entry.split(":")
         ds_name = parts[0]
         ds_config = parts[1] if len(parts) > 1 else None
-        ds_split = parts[2] if len(parts) > 2 else None
+        ds_split = parts[2] if len(parts) > 2 else split
 
         try:
             kwargs = {"cache_dir": cache_dir}
@@ -305,12 +317,13 @@ def load_hf_datasets(dataset_names, config, cache_dir=None, streaming=False):
             if ds_split:
                 ds = {"train": ds} if not isinstance(ds, dict) else ds
         except Exception:
+            fallback_split = ds_split or "train"
             try:
-                ds = load_dataset(ds_name, split="train", cache_dir=cache_dir, trust_remote_code=True)
+                ds = load_dataset(ds_name, split=fallback_split, cache_dir=cache_dir, trust_remote_code=True)
                 ds = {"train": ds}
             except TypeError:
                 try:
-                    ds = load_dataset(ds_name, split="train", cache_dir=cache_dir)
+                    ds = load_dataset(ds_name, split=fallback_split, cache_dir=cache_dir)
                     ds = {"train": ds}
                 except Exception as e:
                     print(f"❌ Failed to load {ds_entry}: {e}")
@@ -325,26 +338,36 @@ def load_hf_datasets(dataset_names, config, cache_dir=None, streaming=False):
         else:
             combined = ds
 
-        audio_col, text_col = detect_columns(combined, ds_name)
-        if audio_col is None or text_col is None:
+        if audio_col or text_col:
+            detected_audio, detected_text = detect_columns(combined, ds_name)
+            ac = audio_col or detected_audio
+            tc = text_col or detected_text
+        else:
+            ac, tc = detect_columns(combined, ds_name)
+
+        if ac is None or tc is None:
             cols = combined.column_names
             print(f"⚠️ Could not detect columns for {ds_name}. Available: {cols}")
             for candidate in AUDIO_COLUMN_NAMES:
                 if candidate in cols:
-                    audio_col = candidate
+                    ac = candidate
                     break
             for candidate in TEXT_COLUMN_NAMES:
                 if candidate in cols:
-                    text_col = candidate
+                    tc = candidate
                     break
-            if audio_col is None or text_col is None:
+            if ac is None or tc is None:
                 print(f"❌ Skipping {ds_name}: no audio/text columns found")
                 continue
 
-        if audio_col != "audio":
-            combined = combined.rename_column(audio_col, "audio")
-        if text_col != "text":
-            combined = combined.rename_column(text_col, "text")
+        if ac not in combined.column_names or tc not in combined.column_names:
+            print(f"❌ Skipping {ds_name}: column(s) not found — audio={ac!r}, text={tc!r}, available={combined.column_names}")
+            continue
+
+        if ac != "audio":
+            combined = combined.rename_column(ac, "audio")
+        if tc != "text":
+            combined = combined.rename_column(tc, "text")
 
         keep_cols = {"audio", "text"}
         remove_cols = [c for c in combined.column_names if c not in keep_cols]

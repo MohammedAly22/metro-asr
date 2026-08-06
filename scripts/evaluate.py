@@ -1,3 +1,5 @@
+import argparse
+import json
 import os
 import sys
 import time
@@ -19,6 +21,10 @@ from metro_asr.model.decoder import CTCBeamSearchDecoder
 from metro_asr.data.features import LogMelFeatureExtractor, resample_audio
 
 # ========================= CONFIGURATION =========================
+# These are only used when no --checkpoint is passed on the CLI (i.e. the
+# original no-arg `python scripts/evaluate.py` multi-model comparison mode).
+
+CONFIG_PATH_DEFAULT = "configs/metro_small.yaml"
 
 # Models to evaluate — add as many as you want to compare
 MODELS = [
@@ -109,19 +115,33 @@ def compute_metrics(predictions, references):
     return w, c
 
 
-def build_beam_decoder(tokenizer):
-    if USE_BEAM_LM and LM_PATH and os.path.exists(LM_PATH):
+def build_beam_decoder(tokenizer, use_beam_lm, lm_path, beam_width, lm_alpha, lm_beta):
+    if not (use_beam_lm and lm_path and os.path.exists(lm_path)):
+        return None
+    try:
         return CTCBeamSearchDecoder(
             tokenizer,
-            lm_path=LM_PATH,
-            beam_width=BEAM_WIDTH,
-            alpha=LM_ALPHA,
-            beta=LM_BETA,
+            lm_path=lm_path,
+            beam_width=beam_width,
+            alpha=lm_alpha,
+            beta=lm_beta,
         )
-    return None
+    except (ImportError, NameError) as exc:
+        # ImportError: pyctcdecode isn't installed. NameError: pyctcdecode IS installed
+        # but its own `kenlm` import failed silently (e.g. no C++ toolchain, or a Python
+        # version kenlm's extension doesn't yet support) — it only warns at import time
+        # and leaves the name unbound, so the crash surfaces here instead. Either way,
+        # fall back to greedy rather than taking down the whole evaluation run.
+        print(f"⚠️ Beam search unavailable ({exc}); falling back to greedy-only. "
+              "Install `metro-asr[lm]` with a working kenlm build to enable it.")
+        return None
 
 
-def evaluate_model(model_info, test_data, feature_extractor_cache, lm_cache, device):
+def evaluate_model(
+    model_info, test_data, feature_extractor_cache, lm_cache, device,
+    use_greedy=True, use_beam_lm=True, lm_path=None, beam_width=200,
+    lm_alpha=0.5, lm_beta=3.0, audio_col="audio", text_col="text",
+):
     name = model_info["name"]
     config = load_config(model_info["config"])
     tokenizer = build_tokenizer(config, model_info["tokenizer_dir"])
@@ -147,14 +167,16 @@ def evaluate_model(model_info, test_data, feature_extractor_cache, lm_cache, dev
     param_count = model.count_parameters()
 
     # Reuse LM decoder per tokenizer (tokenizer identity determines vocab)
-    tokenizer_key = model_info["tokenizer_dir"]
+    tokenizer_key = f"{model_info['tokenizer_dir']}|{lm_path}|{beam_width}|{lm_alpha}|{lm_beta}"
     if tokenizer_key not in lm_cache:
-        lm_cache[tokenizer_key] = build_beam_decoder(tokenizer)
+        lm_cache[tokenizer_key] = build_beam_decoder(
+            tokenizer, use_beam_lm, lm_path, beam_width, lm_alpha, lm_beta
+        )
     beam_decoder = lm_cache[tokenizer_key]
 
-    results = {
-        "greedy": {"predictions": [], "references": [], "rtfs": [], "categories": []},
-    }
+    results = {}
+    if use_greedy:
+        results["greedy"] = {"predictions": [], "references": [], "rtfs": [], "categories": []}
     if beam_decoder:
         results["beam_lm"] = {"predictions": [], "references": [], "rtfs": [], "categories": []}
 
@@ -169,8 +191,8 @@ def evaluate_model(model_info, test_data, feature_extractor_cache, lm_cache, dev
 
     for i in tqdm(range(total), desc=f"  🔄 {name}", ncols=80, leave=True):
         item = test_data[i]
-        audio_data = item["audio"]
-        reference = item.get("text", "")
+        audio_data = item[audio_col]
+        reference = item.get(text_col, "")
 
         if not reference or not reference.strip():
             skipped += 1
@@ -212,7 +234,7 @@ def evaluate_model(model_info, test_data, feature_extractor_cache, lm_cache, dev
             category = "other"
 
         # Greedy
-        if USE_GREEDY:
+        if use_greedy:
             t0 = time.time()
             decoded_ids = model.decode_greedy(log_probs, out_lengths)
             pred_text = tokenizer.decode(decoded_ids[0])
@@ -360,48 +382,88 @@ def print_results_table(all_metrics):
     print(f"  🥇 Best Code-Switching: {best_combo_cs} — WER: {best_wer_cs:.2%}")
 
 
+def parse_args():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--config", help="single-model mode: path to model config.yaml")
+    p.add_argument("--checkpoint", help="single-model mode: path to model.pt")
+    p.add_argument("--tokenizer-dir", help="single-model mode: directory holding bpe.model")
+    p.add_argument("--name", default="Model", help="display name for single-model mode")
+    p.add_argument("--test-data", default=TEST_DATA_PATH, help="directory from datasets.save_to_disk")
+    p.add_argument("--audio-col", "--audio_col", dest="audio_col", default="audio")
+    p.add_argument("--text-col", "--text_col", dest="text_col", default="text")
+    p.add_argument("--lm-path", default=LM_PATH, help="KenLM/ARPA path, or 'none' to disable")
+    p.add_argument("--beam-width", type=int, default=BEAM_WIDTH)
+    p.add_argument("--lm-alpha", type=float, default=LM_ALPHA)
+    p.add_argument("--lm-beta", type=float, default=LM_BETA)
+    p.add_argument("--no-greedy", action="store_true", help="skip greedy decoding")
+    p.add_argument("--no-beam", action="store_true", help="skip beam+LM decoding even if an LM is set")
+    p.add_argument("--output-dir", default=OUTPUT_DIR)
+    p.add_argument("--json-out", default=None, help="also write {method: metrics} as JSON here")
+    p.add_argument("--quiet", action="store_true", help="skip the per-model sample-prediction printout")
+    return p.parse_args()
+
+
 def main():
+    args = parse_args()
     print_banner()
 
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    output_dir = args.output_dir
+    test_data_path = args.test_data
+    device = DEVICE
+    use_greedy = not args.no_greedy
+    lm_path = None if not args.lm_path or args.lm_path.lower() == "none" else args.lm_path
+    use_beam_lm = not args.no_beam and lm_path is not None
+    beam_width, lm_alpha, lm_beta = args.beam_width, args.lm_alpha, args.lm_beta
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    if args.checkpoint:
+        models = [{
+            "name": args.name,
+            "config": args.config or CONFIG_PATH_DEFAULT,
+            "checkpoint": args.checkpoint,
+            "tokenizer_dir": args.tokenizer_dir or "checkpoints",
+        }]
+    else:
+        models = MODELS
 
     # ── Config summary ──
     print_section("Configuration", "⚙️")
-    print(f"  📂 Test data:    {TEST_DATA_PATH}")
-    print(f"  🖥️  Device:       {DEVICE}")
-    print(f"  📝 Greedy:       {'✅' if USE_GREEDY else '❌'}")
-    print(f"  🔍 Beam + LM:    {'✅' if USE_BEAM_LM and LM_PATH else '❌'}")
-    if USE_BEAM_LM and LM_PATH:
-        print(f"  📖 LM path:      {LM_PATH}")
-        print(f"  🔭 Beam width:   {BEAM_WIDTH}")
-        print(f"  α  LM alpha:     {LM_ALPHA}")
-        print(f"  β  LM beta:      {LM_BETA}")
-    print(f"  📊 Models:       {len(MODELS)}")
-    for m in MODELS:
+    print(f"  📂 Test data:    {test_data_path}")
+    print(f"  🖥️  Device:       {device}")
+    print(f"  📝 Greedy:       {'✅' if use_greedy else '❌'}")
+    print(f"  🔍 Beam + LM:    {'✅' if use_beam_lm else '❌'}")
+    if use_beam_lm:
+        print(f"  📖 LM path:      {lm_path}")
+        print(f"  🔭 Beam width:   {beam_width}")
+        print(f"  α  LM alpha:     {lm_alpha}")
+        print(f"  β  LM beta:      {lm_beta}")
+    print(f"  📊 Models:       {len(models)}")
+    for m in models:
         exists = "✅" if os.path.exists(m["checkpoint"]) else "❌"
         print(f"      {exists} {m['name']} → {m['checkpoint']}")
 
     # ── Validate ──
-    if not os.path.exists(TEST_DATA_PATH):
-        print(f"\n  ❌ Test data not found: {TEST_DATA_PATH}")
+    if not os.path.exists(test_data_path):
+        print(f"\n  ❌ Test data not found: {test_data_path}")
         print(f"     Run: python scripts/prepare_data.py")
         return
 
-    valid_models = [m for m in MODELS if os.path.exists(m["checkpoint"])]
+    valid_models = [m for m in models if os.path.exists(m["checkpoint"])]
     if not valid_models:
         print(f"\n  ❌ No valid model checkpoints found!")
         return
 
     # ── Load test data ──
     print_section("Loading Test Data", "📂")
-    test_data = load_test_data(TEST_DATA_PATH)
+    test_data = load_test_data(test_data_path)
 
     # Count categories
     n_cs = 0
     n_ar = 0
     n_other = 0
     for i in range(len(test_data)):
-        text = test_data[i].get("text", "")
+        text = test_data[i].get(args.text_col, "")
         if is_code_switching(text):
             n_cs += 1
         elif is_pure_arabic(text):
@@ -424,7 +486,10 @@ def main():
     for model_info in valid_models:
         print_section(f"Evaluating: {model_info['name']}", "🧪")
         results, metrics, param_count = evaluate_model(
-            model_info, test_data, feature_extractor_cache, lm_cache, DEVICE
+            model_info, test_data, feature_extractor_cache, lm_cache, device,
+            use_greedy=use_greedy, use_beam_lm=use_beam_lm, lm_path=lm_path,
+            beam_width=beam_width, lm_alpha=lm_alpha, lm_beta=lm_beta,
+            audio_col=args.audio_col, text_col=args.text_col,
         )
         all_results[model_info["name"]] = results
         all_metrics[model_info["name"]] = {"metrics": metrics, "params": param_count}
@@ -432,27 +497,37 @@ def main():
     # ── Results tables ──
     print_results_table(all_metrics)
 
+    # ── Save JSON (for programmatic consumption, e.g. from a notebook) ──
+    if args.json_out:
+        os.makedirs(os.path.dirname(args.json_out) or ".", exist_ok=True)
+        json_payload = {
+            model_name: data["metrics"] for model_name, data in all_metrics.items()
+        }
+        with open(args.json_out, "w", encoding="utf-8") as f:
+            json.dump(json_payload, f, ensure_ascii=False, indent=2)
+        print(f"  🧾 JSON saved: {args.json_out}")
+
     # ── Save CSV ──
     print_section("Saving Results", "💾")
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    csv_path = os.path.join(OUTPUT_DIR, f"eval_{timestamp}.csv")
+    csv_path = os.path.join(output_dir, f"eval_{timestamp}.csv")
     save_csv(all_results, csv_path)
     print(f"  📄 CSV saved: {csv_path}")
 
     # ── Save summary ──
-    summary_path = os.path.join(OUTPUT_DIR, f"eval_{timestamp}_summary.txt")
+    summary_path = os.path.join(output_dir, f"eval_{timestamp}_summary.txt")
     with open(summary_path, "w", encoding="utf-8") as f:
         f.write("Metro-ASR Evaluation Summary\n")
         f.write(f"{'=' * 80}\n\n")
         f.write(f"Date: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"Test data: {TEST_DATA_PATH} ({len(test_data)} samples)\n")
+        f.write(f"Test data: {test_data_path} ({len(test_data)} samples)\n")
         f.write(f"  Pure Arabic: {n_ar} | Code-Switching: {n_cs}\n")
-        f.write(f"Device: {DEVICE}\n\n")
+        f.write(f"Device: {device}\n\n")
 
-        if USE_BEAM_LM and LM_PATH:
-            f.write(f"LM: {LM_PATH}\n")
-            f.write(f"Beam width: {BEAM_WIDTH}, Alpha: {LM_ALPHA}, Beta: {LM_BETA}\n\n")
+        if use_beam_lm:
+            f.write(f"LM: {lm_path}\n")
+            f.write(f"Beam width: {beam_width}, Alpha: {lm_alpha}, Beta: {lm_beta}\n\n")
 
         f.write(f"{'Model':<35} {'Method':<10} {'WER(All)':<10} {'WER(AR)':<10} {'WER(CS)':<10} {'CER':<8} {'Params':<12}\n")
         f.write(f"{'-' * 95}\n")
@@ -474,22 +549,23 @@ def main():
     print(f"  📊 Summary saved: {summary_path}")
 
     # ── Sample predictions ──
-    print_section("Sample Predictions (first 3)", "🔎")
+    if not args.quiet:
+        print_section("Sample Predictions (first 3)", "🔎")
 
-    for model_name, methods in all_results.items():
-        print(f"\n  📦 {model_name}")
-        for method, data in methods.items():
-            print(f"    🔹 {method}:")
-            n_show = min(3, len(data["predictions"]))
-            for i in range(n_show):
-                cat = data["categories"][i] if i < len(data["categories"]) else "?"
-                cat_icon = "🌍" if cat == "cs" else "🇪🇬" if cat == "arabic" else "❓"
-                print(f"      {cat_icon} [{i}] ref:  {data['references'][i][:80]}")
-                print(f"         [{i}] pred: {data['predictions'][i][:80]}")
-            print()
+        for model_name, methods in all_results.items():
+            print(f"\n  📦 {model_name}")
+            for method, data in methods.items():
+                print(f"    🔹 {method}:")
+                n_show = min(3, len(data["predictions"]))
+                for i in range(n_show):
+                    cat = data["categories"][i] if i < len(data["categories"]) else "?"
+                    cat_icon = "🌍" if cat == "cs" else "🇪🇬" if cat == "arabic" else "❓"
+                    print(f"      {cat_icon} [{i}] ref:  {data['references'][i][:80]}")
+                    print(f"         [{i}] pred: {data['predictions'][i][:80]}")
+                print()
 
     print_section("Done!", "✅")
-    print(f"  📁 Results saved to: {OUTPUT_DIR}/")
+    print(f"  📁 Results saved to: {output_dir}/")
     print()
 
 

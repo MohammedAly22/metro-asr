@@ -40,6 +40,13 @@ def parse_args():
                    help="pretrained weights to start from")
     p.add_argument("--dataset", default=FINETUNE_DATASET,
                    help="HuggingFace dataset id, ignored if --prepared-data is set")
+    p.add_argument("--audio-col", "--audio_col", dest="audio_col", default=None,
+                   help="audio column name in --dataset (auto-detected if omitted)")
+    p.add_argument("--text-col", "--text_col", dest="text_col", default=None,
+                   help="transcript column name in --dataset (auto-detected if omitted)")
+    p.add_argument("--split", default=None,
+                   help="split to load from --dataset, e.g. 'train' "
+                        "(default: load every split and concatenate them)")
     p.add_argument("--prepared-data", default=PREPARED_DATA_DIR,
                    help="directory with train/ and eval/ splits, skips HF download")
     p.add_argument("--lr", type=float, default=FINETUNE_LR)
@@ -63,7 +70,8 @@ def setup_distributed():
     return False
 
 
-def load_finetune_data(config, logger, dataset_id, prepared_data_dir):
+def load_finetune_data(config, logger, dataset_id, prepared_data_dir,
+                        audio_col=None, text_col=None, split=None):
     """Load the fine-tuning dataset (CS data from HuggingFace or prepared)."""
     if prepared_data_dir and os.path.exists(prepared_data_dir):
         from datasets import load_from_disk
@@ -72,14 +80,18 @@ def load_finetune_data(config, logger, dataset_id, prepared_data_dir):
         eval_path = os.path.join(prepared_data_dir, "eval")
         return load_from_disk(train_path), load_from_disk(eval_path)
 
-    logger.info(f"Loading finetune dataset: {dataset_id}...")
+    logger.info(f"Loading finetune dataset: {dataset_id}"
+                f"{f' (split={split})' if split else ''}...")
     dataset = load_hf_datasets(
         [dataset_id],
         config,
         cache_dir=config["data"].get("cache_dir"),
+        audio_col=audio_col,
+        text_col=text_col,
+        split=split,
     )
-    split = dataset.train_test_split(test_size=0.05, seed=42)
-    return split["train"], split["test"]
+    split_data = dataset.train_test_split(test_size=0.05, seed=42)
+    return split_data["train"], split_data["test"]
 
 
 def main():
@@ -106,7 +118,10 @@ def main():
 
     tokenizer = build_tokenizer(config, args.tokenizer_dir)
 
-    train_data, eval_data = load_finetune_data(config, logger, args.dataset, args.prepared_data)
+    train_data, eval_data = load_finetune_data(
+        config, logger, args.dataset, args.prepared_data,
+        audio_col=args.audio_col, text_col=args.text_col, split=args.split,
+    )
     logger.info(f"  Train: {len(train_data)} samples")
     logger.info(f"  Eval:  {len(eval_data)} samples")
 
@@ -118,7 +133,27 @@ def main():
     if os.path.exists(args.checkpoint):
         logger.info(f"Loading pretrained weights: {args.checkpoint}")
         ckpt = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
-        model.load_state_dict(ckpt["model_state_dict"], strict=False)
+        checkpoint_state = ckpt["model_state_dict"]
+        model_state = model.state_dict()
+
+        # strict=False only tolerates missing/unexpected *keys* — it still hard-errors
+        # on shape mismatches. When --tokenizer-dir points at a different vocab_size
+        # (adapting the tokenizer during fine-tuning), the vocab-sized CTC heads change
+        # shape, so we drop just those tensors here and let them init fresh instead.
+        compatible_state = {}
+        skipped = []
+        for key, tensor in checkpoint_state.items():
+            if key in model_state and tensor.shape == model_state[key].shape:
+                compatible_state[key] = tensor
+            else:
+                skipped.append(key)
+
+        model.load_state_dict(compatible_state, strict=False)
+        if skipped:
+            logger.warning(
+                f"Skipped {len(skipped)} tensor(s) with a different shape than the checkpoint "
+                f"(new tokenizer/vocab_size) — these will train from scratch: {skipped}"
+            )
     else:
         logger.warning(f"Pretrained checkpoint not found: {args.checkpoint}")
         logger.warning("  Training from scratch instead.")

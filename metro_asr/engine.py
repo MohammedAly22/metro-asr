@@ -70,7 +70,13 @@ def _build_beam_decoder(tokenizer, lm_path, beam_width, alpha, beta, strict):
         return CTCBeamSearchDecoder(
             tokenizer, lm_path=lm_path, beam_width=beam_width, alpha=alpha, beta=beta,
         )
-    except ImportError as exc:
+    except (ImportError, NameError) as exc:
+        # ImportError: pyctcdecode itself isn't installed.
+        # NameError: pyctcdecode IS installed but its own `kenlm` import failed —
+        # it only warns at import time and leaves the name unbound, so the crash
+        # surfaces here instead, e.g. when kenlm's C++ extension couldn't build
+        # (a real occurrence: no C++ toolchain, or a Python version kenlm doesn't
+        # yet support) even though `pip install metro-asr[lm]` otherwise succeeded.
         message = (
             f"Language model at '{lm_path}' found, but beam search decoding needs "
             "the `lm` extra: `pip install metro-asr[lm]`."
