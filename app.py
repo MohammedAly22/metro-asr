@@ -226,6 +226,7 @@ def on_decoding_change(method):
 CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800;900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap');
 
 /* ── Global ── */
 body, .gradio-container {
@@ -321,20 +322,19 @@ html, body {
     gap: 24px !important;
     align-items: stretch !important;
 }
+/* min-height, not height: forcing a fixed height stretched the audio block's
+   inner wrapper and pushed the upload / microphone buttons off its bottom edge
+   once a file was loaded. */
 .io-panel {
-    height: 340px !important;
-}
-.io-panel > .wrap,
-.io-panel .audio-container,
-.io-panel .component-wrapper {
-    height: 100% !important;
+    min-height: 340px !important;
+    height: auto !important;
+    overflow: visible !important;
 }
 @media (max-width: 860px) {
     .io-row {
         flex-direction: column !important;
     }
     .io-panel {
-        height: auto !important;
         min-height: 260px !important;
     }
 }
@@ -371,7 +371,7 @@ html, body {
     border: 1px solid #252525 !important;
     border-radius: 12px !important;
     padding: 20px !important;
-    font-family: 'Space Grotesk', sans-serif !important;
+    font-family: 'Cairo', 'Space Grotesk', sans-serif !important;
     overflow-wrap: anywhere !important;
     overflow-y: auto !important;
 }
