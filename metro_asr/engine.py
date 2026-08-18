@@ -89,6 +89,15 @@ def _build_beam_decoder(tokenizer, lm_path, beam_width, alpha, beta, strict):
 
 
 @dataclass
+class EncodedAudio:
+    """Cached acoustic-model output, ready to be decoded at any settings."""
+    log_probs: "torch.Tensor"
+    lengths: "torch.Tensor"
+    duration: float
+    inference_time: float
+
+
+@dataclass
 class TranscriptionResult:
     text: str
     duration: float
@@ -364,6 +373,64 @@ class MetroASREngine:
 
         return waveform
 
+    def encode(self, audio_input) -> "EncodedAudio":
+        """
+        Run the acoustic model only, returning frame log-probabilities.
+
+        Split out from :meth:`transcribe` so that re-tuning beam width, alpha or
+        beta does not pay for the encoder again. The encoder dominates runtime;
+        beam search over cached log-probs is typically an order of magnitude
+        cheaper, which is what makes interactive parameter sweeps feel instant.
+        """
+        waveform = self._load_audio(audio_input)
+        duration = waveform.shape[0] / self.sample_rate
+
+        features = self.feature_extractor(waveform).unsqueeze(0).to(self.device)
+        feature_lengths = torch.tensor(
+            [features.shape[1]], dtype=torch.long, device=self.device
+        )
+
+        t_start = time.time()
+        with torch.no_grad():
+            log_probs, out_lengths, _ = self.model(features, feature_lengths)
+        inference_time = time.time() - t_start
+
+        return EncodedAudio(
+            log_probs=log_probs,
+            lengths=out_lengths,
+            duration=duration,
+            inference_time=inference_time,
+        )
+
+    def decode_logits(
+        self,
+        encoded: "EncodedAudio",
+        beam_search: bool = False,
+        beam_width: Optional[int] = None,
+        lm_alpha: Optional[float] = None,
+        lm_beta: Optional[float] = None,
+        lm_path: Optional[str] = None,
+    ) -> TranscriptionResult:
+        """Decode the output of :meth:`encode`, reusing its cached log-probs."""
+        t_decode = time.time()
+        text, method = self._decode(
+            encoded.log_probs, encoded.lengths, beam_search,
+            beam_width, lm_alpha, lm_beta, lm_path,
+        )
+        decoding_time = time.time() - t_decode
+
+        total_time = encoded.inference_time + decoding_time
+        rtf = total_time / encoded.duration if encoded.duration > 0 else 0.0
+
+        return TranscriptionResult(
+            text=text,
+            duration=encoded.duration,
+            rtf=rtf,
+            inference_time=encoded.inference_time,
+            decoding_time=decoding_time,
+            method=method,
+        )
+
     def transcribe(
         self,
         audio_input: Union[str, torch.Tensor, np.ndarray, tuple],
@@ -549,10 +616,16 @@ class MetroASREngine:
         if beam_search:
             decoder = self._get_beam_decoder(lm_path, beam_width, lm_alpha, lm_beta)
             if decoder is not None:
-                results = decoder.decode(log_probs, out_lengths)
                 bw = beam_width or self._beam_width
                 a = lm_alpha if lm_alpha is not None else self._lm_alpha
                 b = lm_beta if lm_beta is not None else self._lm_beta
+                # These have to reach the decoder, not just the label below.
+                # The cached decoder was built with the constructor's values, so
+                # without passing them here every per-call override was silently
+                # ignored while the reported method still claimed otherwise.
+                results = decoder.decode(
+                    log_probs, out_lengths, beam_width=bw, alpha=a, beta=b,
+                )
                 return results[0], f"beam_search+lm (beam={bw}, alpha={a}, beta={b})"
 
         decoded_ids = self.model.decode_greedy(log_probs, out_lengths)

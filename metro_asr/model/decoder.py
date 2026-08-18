@@ -45,6 +45,8 @@ class CTCBeamSearchDecoder:
 
         self.tokenizer = tokenizer
         self.beam_width = beam_width
+        self.alpha = alpha
+        self.beta = beta
 
         vocab = self._build_vocab()
 
@@ -91,7 +93,27 @@ class CTCBeamSearchDecoder:
             vocab.append(token)
         return vocab
 
-    def decode(self, log_probs, lengths=None):
+    def _apply_params(self, alpha=None, beta=None):
+        """
+        Retune the LM weights in place.
+
+        pyctcdecode bakes alpha and beta into the decoder when it is built, but
+        exposes ``reset_params`` to change them afterwards. Going through it is
+        what keeps per-call tuning free: rebuilding the decoder would reload the
+        KenLM binary — several GB for the shipped 5-gram — on every change.
+        It is a no-op when no language model is attached.
+        """
+        a = self.alpha if alpha is None else alpha
+        b = self.beta if beta is None else beta
+        if (a, b) == (self.alpha, self.beta):
+            return
+        self.decoder.reset_params(alpha=a, beta=b)
+        self.alpha, self.beta = a, b
+
+    def decode(self, log_probs, lengths=None, beam_width=None, alpha=None, beta=None):
+        self._apply_params(alpha, beta)
+        width = beam_width or self.beam_width
+
         results = []
         log_probs_np = log_probs.float().cpu().numpy()
 
@@ -101,13 +123,17 @@ class CTCBeamSearchDecoder:
 
             text = self.decoder.decode(
                 lp,
-                beam_width=self.beam_width,
+                beam_width=width,
             )
             results.append(text.strip())
 
         return results
 
-    def decode_batch(self, log_probs, lengths=None, batch_size=16):
+    def decode_batch(self, log_probs, lengths=None, batch_size=16,
+                     beam_width=None, alpha=None, beta=None):
+        self._apply_params(alpha, beta)
+        width = beam_width or self.beam_width
+
         log_probs_np = log_probs.float().cpu().numpy()
 
         if lengths is not None:
@@ -121,7 +147,7 @@ class CTCBeamSearchDecoder:
         with self.decoder.pool(processes=min(4, len(pool_input))) as pool:
             results = pool.decode_batch(
                 pool_input,
-                beam_width=self.beam_width,
+                beam_width=width,
             )
 
         return [r.strip() for r in results]

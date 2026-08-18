@@ -222,8 +222,14 @@ Recipe for building one: [Training a language head only](#training-a-language-he
 | `lm_alpha` (α) | 0.0 – 3.0  | output is not valid Arabic                  | the LM overrides what was clearly said |
 | `lm_beta` (β)  | 0.0 – 10.0 | words are being deleted, especially English | words are being hallucinated           |
 
-Defaults are `beam_width=100`, `α=0.5`, `β=5.0`. Sweep them on your own data with
+Library defaults are `beam_width=100`, `α=0.5`, `β=5.0`. Sweep them on your own data with
 `TUNE_MODE = True` in [scripts/inference.py](scripts/inference.py).
+
+A 48-point sweep over the seven general clips in `test_samples/` put the optimum at
+`beam_width=100`, `α=0.5`, `β=3.0` — WER 0.316 / CER 0.095, against a greedy baseline of
+0.353. `beam_width=200` matched it for ~35% more decode time, and `β=9.0` was far worse
+(0.581). The Gradio demo starts from those swept values. Seven clips is a small sample, so
+treat it as a starting point rather than a settled answer for your own audio.
 
 > [!TIP]
 > The single most common complaint — *"it drops my English words"* — is a `β` problem, not an `α`

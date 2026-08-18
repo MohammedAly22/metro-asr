@@ -52,6 +52,15 @@ SERVER_PORT = int(os.environ.get("METRO_PORT", 7860))
 SHARE = os.environ.get("METRO_SHARE", "false").lower() == "true"
 
 EXAMPLES_DIR = os.path.join(HERE, "gradio_examples")
+
+# Swept over the seven general clips in test_samples/ against the references in
+# docs/results.json. beam=100 a=0.5 b=3.0 gave WER 0.316 / CER 0.095 against a
+# greedy baseline of 0.353. Beam 200 matched it for ~35% more decode time, and
+# beta 9.0 was far worse (0.581), so the old beta=5.0 default was leaving
+# accuracy on the table.
+DEFAULT_BEAM_WIDTH = 100
+DEFAULT_LM_ALPHA = 0.5
+DEFAULT_LM_BETA = 3.0
 # =================================================================
 
 
@@ -143,6 +152,20 @@ EXAMPLE_PATHS, EXAMPLE_LABELS = _build_examples()
 
 # ── File upload transcription ──
 
+# The acoustic model is the expensive half; beam search over cached log-probs is
+# far cheaper. Holding the last clip's encoder output means dragging a slider
+# re-decodes only, so parameter changes land immediately instead of paying for
+# the encoder again on every adjustment.
+_ENCODED_CACHE = {"path": None, "encoded": None}
+
+
+def _encode_cached(audio_path):
+    if _ENCODED_CACHE["path"] != audio_path:
+        _ENCODED_CACHE["encoded"] = engine.encode(audio_path)
+        _ENCODED_CACHE["path"] = audio_path
+    return _ENCODED_CACHE["encoded"]
+
+
 def transcribe(audio_path, decoding_method, beam_width, lm_alpha, lm_beta):
     if audio_path is None:
         return "", "", ""
@@ -150,8 +173,8 @@ def transcribe(audio_path, decoding_method, beam_width, lm_alpha, lm_beta):
     try:
         use_beam = decoding_method == "Beam Search + LM"
 
-        result = engine.transcribe(
-            audio_path,
+        result = engine.decode_logits(
+            _encode_cached(audio_path),
             beam_search=use_beam,
             beam_width=int(beam_width),
             lm_alpha=lm_alpha,
@@ -631,17 +654,17 @@ with gr.Blocks(title="Metro-ASR", fill_width=False, **_BLOCKS_KWARGS) as demo:
     with gr.Group(visible=True, elem_classes=["beam-section"]) as beam_group:
         with gr.Row():
             beam_width = gr.Slider(
-                minimum=5, maximum=500, value=100, step=5,
+                minimum=5, maximum=500, value=DEFAULT_BEAM_WIDTH, step=5,
                 label="Beam Width",
                 info="Parallel hypotheses",
             )
             lm_alpha = gr.Slider(
-                minimum=0.0, maximum=3.0, value=0.5, step=0.1,
+                minimum=0.0, maximum=3.0, value=DEFAULT_LM_ALPHA, step=0.1,
                 label="LM Weight (Alpha)",
                 info="Language model influence",
             )
             lm_beta = gr.Slider(
-                minimum=0.0, maximum=10.0, value=5.0, step=0.5,
+                minimum=0.0, maximum=10.0, value=DEFAULT_LM_BETA, step=0.5,
                 label="Word Bonus (Beta)",
                 info="Prevents word deletion",
             )
@@ -674,12 +697,6 @@ with gr.Blocks(title="Metro-ASR", fill_width=False, **_BLOCKS_KWARGS) as demo:
     )
 
     # ── Events ──
-    decoding_method.change(
-        fn=on_decoding_change,
-        inputs=[decoding_method],
-        outputs=[beam_group],
-    )
-
     transcribe_io = dict(
         fn=transcribe,
         inputs=[audio_input, decoding_method, beam_width, lm_alpha, lm_beta],
@@ -687,6 +704,18 @@ with gr.Blocks(title="Metro-ASR", fill_width=False, **_BLOCKS_KWARGS) as demo:
     )
 
     submit_btn.click(**transcribe_io)
+
+    # Changing any decoding parameter re-runs immediately. Sliders fire on
+    # release rather than on every pixel of drag, and the encoder output is
+    # cached, so each update costs a decode instead of a full forward pass.
+    for control in (beam_width, lm_alpha, lm_beta):
+        control.release(**transcribe_io)
+
+    decoding_method.change(
+        fn=on_decoding_change,
+        inputs=[decoding_method],
+        outputs=[beam_group],
+    ).then(**transcribe_io)
 
     # Clicking an example transcribes it straight away. Chaining off
     # `load_input_event` rather than passing `run_on_click` means the run picks
