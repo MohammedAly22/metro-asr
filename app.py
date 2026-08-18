@@ -313,15 +313,43 @@ html, body {
     font-family: 'Space Grotesk', sans-serif;
 }
 
-/* ── Two-Column Layout ── */
-.main-row {
-    gap: 28px !important;
-    align-items: flex-start !important;
+/* ── Input / output row ──
+   Only the audio player and the transcription sit side by side. Both panels are
+   pinned to the same height so the two columns read as a matched pair instead
+   of one column running far past the other. */
+.io-row {
+    gap: 24px !important;
+    align-items: stretch !important;
+}
+.io-panel {
+    height: 340px !important;
+}
+.io-panel > .wrap,
+.io-panel .audio-container,
+.io-panel .component-wrapper {
+    height: 100% !important;
 }
 @media (max-width: 860px) {
-    .main-row {
+    .io-row {
         flex-direction: column !important;
     }
+    .io-panel {
+        height: auto !important;
+        min-height: 260px !important;
+    }
+}
+
+/* ── Full-width stack below the row ── */
+.stack-label {
+    color: #e57373 !important;
+    font-size: 0.72em !important;
+    letter-spacing: 2.4px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    padding: 22px 0 10px 0 !important;
+    border-bottom: 1px solid #1a1a1a !important;
+    margin-bottom: 14px !important;
+    font-family: 'Space Grotesk', sans-serif !important;
 }
 
 /* ── Output Text ── */
@@ -334,7 +362,10 @@ html, body {
     direction: ltr !important;
     unicode-bidi: plaintext !important;
     text-align: start !important;
-    min-height: 220px !important;
+    height: 268px !important;
+    min-height: 268px !important;
+    max-height: 268px !important;
+    resize: none !important;
     background: #0d0d0d !important;
     color: #f0f0f0 !important;
     border: 1px solid #252525 !important;
@@ -342,6 +373,7 @@ html, body {
     padding: 20px !important;
     font-family: 'Space Grotesk', sans-serif !important;
     overflow-wrap: anywhere !important;
+    overflow-y: auto !important;
 }
 
 /* ── Speed Badge ── */
@@ -358,38 +390,38 @@ html, body {
     font-weight: 700;
 }
 
-/* ── Metrics ── */
+/* ── Metrics ──
+   Stat tiles rather than full-width rows: across the whole page a
+   label-left/value-right row leaves a river of empty space in the middle.
+   `minmax(0, 1fr)` tracks let a long value wrap instead of widening the grid. */
 .metrics-container {
-    background: #0e0e0e;
-    border: 1px solid #1a1a1a;
-    border-radius: 12px;
-    padding: 16px 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+    gap: 10px;
     margin-top: 4px;
 }
-/* Grid tracks with an explicit 0 minimum, so a long value wraps instead of
-   stretching the panel. */
 .metric-row {
-    display: grid;
-    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
-    gap: 4px 14px;
-    align-items: baseline;
-    padding: 8px 0;
-    border-bottom: 1px solid #151515;
-    font-size: 0.88em;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    background: #0e0e0e;
+    border: 1px solid #1a1a1a;
+    border-radius: 10px;
+    padding: 13px 15px;
     font-family: 'Space Grotesk', sans-serif;
-}
-.metric-row:last-child {
-    border-bottom: none;
 }
 .metric-label {
     color: #e57373;
-    font-weight: 600;
+    font-weight: 700;
+    font-size: 0.66em;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
 }
 .metric-value {
-    color: #aaa;
+    color: #ddd;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.92em;
-    text-align: right;
+    font-size: 1.0em;
     overflow-wrap: anywhere;
     min-width: 0;
 }
@@ -448,16 +480,35 @@ html, body {
     overflow-x: auto !important;
 }
 
-/* ── About / Footer ── */
-.about-section {
-    background: #0e0e0e !important;
-    border: 1px solid #1a1a1a !important;
-    border-radius: 12px !important;
-    padding: 18px !important;
-    color: #888 !important;
+/* ── Links / Footer ── */
+.metro-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    padding: 30px 0 4px 0;
 }
-.about-section * {
-    overflow-wrap: anywhere !important;
+.metro-links a {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #0e0e0e;
+    border: 1px solid #242424;
+    color: #bbb !important;
+    text-decoration: none !important;
+    padding: 11px 22px;
+    border-radius: 10px;
+    font-size: 0.82em;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    font-family: 'Space Grotesk', sans-serif;
+    transition: all 0.25s ease;
+}
+.metro-links a:hover {
+    border-color: #e53935;
+    color: #fff !important;
+    box-shadow: 0 4px 22px rgba(229, 57, 53, 0.18);
+    transform: translateY(-1px);
 }
 .metro-footer {
     text-align: center;
@@ -531,86 +582,90 @@ with gr.Blocks(title="Metro-ASR", fill_width=False, **_BLOCKS_KWARGS) as demo:
         '</div>'
     )
 
-    with gr.Row(elem_classes=["main-row"]):
-
-        # ─────────── Left: input ───────────
-        with gr.Column(scale=1):
+    # ── Audio in / transcription out, side by side and equal height ──
+    with gr.Row(elem_classes=["io-row"]):
+        with gr.Column(scale=1, min_width=300):
             audio_input = gr.Audio(
                 type="filepath",
                 label="Upload or record audio",
                 sources=["upload", "microphone"],
+                elem_classes=["io-panel"],
                 waveform_options=gr.WaveformOptions(
                     waveform_color="#e53935",
                     waveform_progress_color="#ff5252",
                 ),
             )
 
-            if EXAMPLE_PATHS:
-                gr.Examples(
-                    examples=EXAMPLE_PATHS,
-                    inputs=[audio_input],
-                    example_labels=EXAMPLE_LABELS,
-                    label="Examples",
-                    examples_per_page=12,
-                    # Caching would run every clip through beam search at build
-                    # time, which on a cpu-basic Space is slow enough to time out.
-                    cache_examples=False,
-                    elem_id="metro-examples",
-                )
-
-            decoding_method = gr.Radio(
-                choices=["Greedy", "Beam Search + LM"],
-                value="Beam Search + LM" if engine.has_lm else "Greedy",
-                label="Decoding",
-                info="Greedy is instant; Beam + LM is more accurate",
-            )
-
-            with gr.Group(visible=True, elem_classes=["beam-section"]) as beam_group:
-                beam_width = gr.Slider(
-                    minimum=5, maximum=500, value=100, step=5,
-                    label="Beam Width",
-                    info="Parallel hypotheses",
-                )
-                lm_alpha = gr.Slider(
-                    minimum=0.0, maximum=3.0, value=0.5, step=0.1,
-                    label="LM Weight (Alpha)",
-                    info="Language model influence",
-                )
-                lm_beta = gr.Slider(
-                    minimum=0.0, maximum=10.0, value=5.0, step=0.5,
-                    label="Word Bonus (Beta)",
-                    info="Prevents word deletion",
-                )
-
-            submit_btn = gr.Button(
-                "TRANSCRIBE",
-                variant="primary",
-                size="lg",
-                elem_classes=["transcribe-btn"],
-            )
-
-        # ─────────── Right: output ───────────
-        with gr.Column(scale=1):
+        with gr.Column(scale=1, min_width=300):
             output_text = gr.Textbox(
                 label="Transcription",
-                lines=9,
-                elem_classes=["output-text"],
-                placeholder="Pick an example or upload audio, then press TRANSCRIBE.",
+                lines=10,
+                elem_classes=["output-text", "io-panel"],
+                placeholder="Pick an example below, or upload audio and press TRANSCRIBE.",
             )
 
-            speed_badge = gr.HTML("")
-            stats_output = gr.HTML("")
-
-    # ── About ──
-    with gr.Accordion("About Metro-ASR", open=False):
-        gr.Markdown(
-            "**Metro-ASR** is a non-autoregressive ASR system built on a Conformer "
-            "acoustic encoder with RoPE, SwiGLU, RMSNorm, SE-Conv, Stochastic Depth "
-            "and intermediate CTC supervision, paired with a detachable KenLM "
-            "language head. Trained on 130K+ Egyptian Arabic audio samples with "
-            "code-switching support. This demo runs entirely on **CPU**.",
-            elem_classes=["about-section"],
+    # ── Everything else runs full width, one block after another ──
+    examples_block = None
+    if EXAMPLE_PATHS:
+        gr.HTML('<div class="stack-label">Examples</div>')
+        examples_block = gr.Examples(
+            examples=EXAMPLE_PATHS,
+            inputs=[audio_input],
+            example_labels=EXAMPLE_LABELS,
+            label=None,
+            examples_per_page=12,
+            # Caching would run every clip through beam search at build time,
+            # which on a cpu-basic Space is slow enough to time out.
+            cache_examples=False,
+            elem_id="metro-examples",
         )
+
+    gr.HTML('<div class="stack-label">Decoding</div>')
+    decoding_method = gr.Radio(
+        choices=["Greedy", "Beam Search + LM"],
+        value="Beam Search + LM" if engine.has_lm else "Greedy",
+        label="Strategy",
+        info="Greedy is instant; Beam + LM is more accurate",
+    )
+
+    with gr.Group(visible=True, elem_classes=["beam-section"]) as beam_group:
+        with gr.Row():
+            beam_width = gr.Slider(
+                minimum=5, maximum=500, value=100, step=5,
+                label="Beam Width",
+                info="Parallel hypotheses",
+            )
+            lm_alpha = gr.Slider(
+                minimum=0.0, maximum=3.0, value=0.5, step=0.1,
+                label="LM Weight (Alpha)",
+                info="Language model influence",
+            )
+            lm_beta = gr.Slider(
+                minimum=0.0, maximum=10.0, value=5.0, step=0.5,
+                label="Word Bonus (Beta)",
+                info="Prevents word deletion",
+            )
+
+    submit_btn = gr.Button(
+        "TRANSCRIBE",
+        variant="primary",
+        size="lg",
+        elem_classes=["transcribe-btn"],
+    )
+
+    gr.HTML('<div class="stack-label">Metrics</div>')
+    speed_badge = gr.HTML("")
+    stats_output = gr.HTML("")
+
+    # ── Links ──
+    gr.HTML(
+        '<div class="metro-links">'
+        '<a href="https://huggingface.co/mohammedaly22/Metro-ASR-Small" target="_blank" rel="noopener">'
+        'MODEL ON HUGGING FACE</a>'
+        '<a href="https://github.com/MohammedAly22/metro-asr" target="_blank" rel="noopener">'
+        'GITHUB REPOSITORY</a>'
+        '</div>'
+    )
 
     gr.HTML(
         '<div class="metro-footer">'
@@ -625,11 +680,20 @@ with gr.Blocks(title="Metro-ASR", fill_width=False, **_BLOCKS_KWARGS) as demo:
         outputs=[beam_group],
     )
 
-    submit_btn.click(
+    transcribe_io = dict(
         fn=transcribe,
         inputs=[audio_input, decoding_method, beam_width, lm_alpha, lm_beta],
         outputs=[output_text, speed_badge, stats_output],
     )
+
+    submit_btn.click(**transcribe_io)
+
+    # Clicking an example transcribes it straight away. Chaining off
+    # `load_input_event` rather than passing `run_on_click` means the run picks
+    # up whatever decoding settings are selected right now, instead of needing
+    # every setting baked into each example row.
+    if examples_block is not None:
+        examples_block.load_input_event.then(**transcribe_io)
 
 
 if __name__ == "__main__":
