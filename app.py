@@ -1,6 +1,7 @@
 import os
-import numpy as np
-import torch
+import glob
+import hashlib
+
 import gradio as gr
 
 from metro_asr import MetroASREngine
@@ -8,12 +9,40 @@ from metro_asr import MetroASREngine
 # ========================= CONFIGURATION =========================
 DEVICE = "cpu"
 
-# A local directory (config.yaml + model.pt + bpe.model), a size alias
-# ("small"), or a HuggingFace repo id.
-MODEL = os.environ.get("METRO_MODEL", "checkpoints")
+HERE = os.path.dirname(os.path.abspath(__file__))
 
-# "auto" picks up a KenLM binary next to the checkpoint; None disables beam search.
-LM_PATH = os.environ.get("METRO_LM", "auto")
+# Gradio moved `theme` and `css` from Blocks() to launch() in v6. This app is
+# shipped both to the GitHub repo (dev machines, currently 6.x) and to the
+# HuggingFace Space (pinned to 5.x), so pick the right home for them at import
+# time rather than committing two divergent copies of the file.
+GRADIO_MAJOR = int(gr.__version__.split(".")[0])
+
+
+def _resolve_model_dir():
+    """
+    Locate the checkpoint. `METRO_MODEL` wins; otherwise look for the two
+    layouts this app actually ships in — `checkpoints/` in the git repo and
+    `model_files/` on the Space — before falling back to the HF alias.
+    """
+    env = os.environ.get("METRO_MODEL")
+    if env:
+        return env
+    for name in ("checkpoints", "model_files"):
+        candidate = os.path.join(HERE, name)
+        if os.path.exists(os.path.join(candidate, "config.yaml")):
+            return candidate
+    return "small"
+
+
+MODEL = _resolve_model_dir()
+
+# The 5.9 GB KenLM binary is not checked into either repo. `auto` picks it up if
+# it happens to sit next to the checkpoint; otherwise fetch it once on cold
+# start. METRO_SKIP_LM=1 forces a greedy-only boot, which is much faster while
+# iterating on the UI.
+LM_REPO_ID = os.environ.get("METRO_LM_REPO", "mohammedaly22/Metro-ASR-Small")
+LM_FILENAME = "lm_5gram.bin"
+SKIP_LM = os.environ.get("METRO_SKIP_LM") == "1"
 
 SERVER_PORT = int(os.environ.get("METRO_PORT", 7860))
 
@@ -22,14 +51,94 @@ SERVER_PORT = int(os.environ.get("METRO_PORT", 7860))
 # gradio.live tunnel URL printed to stdout instead. Leave unset for local use.
 SHARE = os.environ.get("METRO_SHARE", "false").lower() == "true"
 
-STREAM_MIN_DURATION = 3.0
-STREAM_TARGET_SR = 16000
+EXAMPLES_DIR = os.path.join(HERE, "gradio_examples")
 # =================================================================
 
+
+def _resolve_lm_path():
+    if SKIP_LM:
+        return None
+
+    if os.path.isdir(MODEL):
+        local = os.path.join(MODEL, LM_FILENAME)
+        if os.path.exists(local):
+            return local
+
+    try:
+        from huggingface_hub import hf_hub_download
+        print(f"Fetching {LM_FILENAME} from {LM_REPO_ID} (~5.9 GB, once per cold start)...")
+        return hf_hub_download(repo_id=LM_REPO_ID, filename=LM_FILENAME)
+    except Exception as exc:
+        print(f"Could not fetch {LM_FILENAME}: {exc} — falling back to greedy decoding.")
+        return None
+
+
 print(f"Loading Metro-ASR from {MODEL}...")
-engine = MetroASREngine.from_pretrained(MODEL, device=DEVICE, lm_path=LM_PATH)
+engine = MetroASREngine.from_pretrained(MODEL, device=DEVICE, lm_path=_resolve_lm_path())
 _param_count = engine.param_count
 print(f"Model loaded: {_param_count:,} params | LM: {'loaded' if engine.has_lm else 'none'}")
+
+
+# ── Examples ──
+# Labelled by language and duration so the picker is scannable. Files are
+# discovered at startup, so a missing or renamed clip drops out of the list
+# instead of breaking the app.
+
+EXAMPLE_LANGUAGES = [
+    ("ar_", "Egyptian Arabic"),
+    ("cs_", "Code-Switching"),
+    ("en_", "English"),
+]
+
+
+def _example_duration(path):
+    try:
+        import soundfile as sf
+        return sf.info(path).duration
+    except Exception:
+        return None
+
+
+def _build_examples():
+    found = sorted(glob.glob(os.path.join(EXAMPLES_DIR, "*")))
+    if not found:
+        return [], []
+
+    by_prefix = {prefix: [] for prefix, _ in EXAMPLE_LANGUAGES}
+    for path in found:
+        name = os.path.basename(path).lower()
+        for prefix, _ in EXAMPLE_LANGUAGES:
+            if name.startswith(prefix):
+                by_prefix[prefix].append(path)
+                break
+
+    # The same clip filed under two language prefixes would appear twice under
+    # contradictory labels, so keep the first in EXAMPLE_LANGUAGES order and
+    # drop later copies. Compares content, not filename.
+    seen = set()
+    paths, labels = [], []
+    for prefix, language in EXAMPLE_LANGUAGES:
+        index = 0
+        for path in by_prefix[prefix]:
+            try:
+                with open(path, "rb") as fh:
+                    digest = hashlib.md5(fh.read()).hexdigest()
+            except OSError:
+                continue
+            if digest in seen:
+                print(f"Skipping duplicate example: {os.path.basename(path)}")
+                continue
+            seen.add(digest)
+
+            index += 1
+            duration = _example_duration(path)
+            suffix = f" · {duration:.0f}s" if duration else ""
+            paths.append([path])
+            labels.append(f"{language} {index}{suffix}")
+    return paths, labels
+
+
+EXAMPLE_PATHS, EXAMPLE_LABELS = _build_examples()
 
 
 # ── File upload transcription ──
@@ -57,31 +166,49 @@ def transcribe(audio_path, decoding_method, beam_width, lm_alpha, lm_beta):
         rtf = result.rtf
 
         if use_beam and not engine.has_lm:
-            method_label = "Greedy (LM not available)"
+            method_label = "Greedy (LM unavailable)"
         elif use_beam:
-            method_label = f"Beam Search + LM (beam={int(beam_width)}, alpha={lm_alpha}, beta={lm_beta})"
+            method_label = "Beam Search + LM"
         else:
-            method_label = "Greedy Decoding"
+            method_label = "Greedy"
 
-        if rtf < 1.0 and rtf > 0:
-            speed_note = f'<div class="speed-badge"><span class="speed-val">{1/rtf:.1f}x</span> faster than real-time</div>'
+        if 0 < rtf < 1.0:
+            speed_note = (
+                f'<div class="speed-badge"><span class="speed-val">{1/rtf:.1f}x</span>'
+                ' faster than real-time</div>'
+            )
         else:
-            speed_note = f'<div class="speed-badge"><span class="speed-val">{rtf:.1f}x</span> slower than real-time</div>'
+            speed_note = (
+                f'<div class="speed-badge"><span class="speed-val">{rtf:.1f}x</span>'
+                ' slower than real-time</div>'
+            )
 
-        metrics_rows = "".join(f"""
-            <div class="metric-row">
-                <span class="metric-label">{label}</span>
-                <span class="metric-value">{value}</span>
-            </div>""" for label, value in [
+        # Beam parameters get their own rows rather than being appended to the
+        # method string — a long single value is what used to force the metrics
+        # panel wider than its column.
+        rows = [
             ("Audio Duration", f"{duration:.2f}s"),
             ("Model Inference", f"{model_time*1000:.1f}ms"),
             ("Decoding Time", f"{decode_time*1000:.1f}ms"),
             ("Total Latency", f"{total_time*1000:.1f}ms"),
             ("RTF", f"{rtf:.4f}"),
             ("Method", method_label),
+        ]
+        if use_beam and engine.has_lm:
+            rows += [
+                ("Beam Width", f"{int(beam_width)}"),
+                ("Alpha / Beta", f"{lm_alpha} / {lm_beta}"),
+            ]
+        rows += [
             ("Device", DEVICE.upper()),
             ("Parameters", f"{_param_count:,}"),
-        ])
+        ]
+
+        metrics_rows = "".join(f"""
+            <div class="metric-row">
+                <span class="metric-label">{label}</span>
+                <span class="metric-value">{value}</span>
+            </div>""" for label, value in rows)
         stats_html = f'<div class="metrics-container">{metrics_rows}</div>'
 
         return text, speed_note, stats_html
@@ -92,66 +219,6 @@ def transcribe(audio_path, decoding_method, beam_width, lm_alpha, lm_beta):
 
 def on_decoding_change(method):
     return gr.update(visible=(method == "Beam Search + LM"))
-
-
-# ── Streaming transcription ──
-# Gradio streaming sends tiny chunks (~200ms). CTC needs at least ~3s of
-# context. We accumulate all audio received so far and re-transcribe the
-# full buffer each time — the model is fast enough on CPU for this.
-
-def _raw_to_float(waveform):
-    if waveform.dtype == np.int16:
-        return waveform.astype(np.float32) / 32768.0
-    if waveform.dtype == np.int32:
-        return waveform.astype(np.float32) / 2147483648.0
-    if waveform.dtype == np.float64:
-        return waveform.astype(np.float32)
-    return waveform.astype(np.float32)
-
-
-def _transcribe_waveform(waveform_np):
-    waveform = torch.tensor(waveform_np, dtype=torch.float32)
-    if waveform.dim() > 1:
-        waveform = waveform.mean(dim=0)
-    if waveform.shape[0] == 0:
-        return ""
-
-    return engine.transcribe(waveform).text.strip()
-
-
-def transcribe_streaming(audio_chunk, state):
-    if state is None:
-        state = {"buffer": np.array([], dtype=np.float32), "sr": STREAM_TARGET_SR}
-
-    if audio_chunk is None:
-        text = _transcribe_waveform(state["buffer"]) if state["buffer"].size > 0 else ""
-        return text, state
-
-    sr, chunk = audio_chunk
-    chunk = _raw_to_float(chunk)
-
-    if chunk.ndim > 1:
-        chunk = chunk.mean(axis=1)
-
-    if sr != STREAM_TARGET_SR:
-        import torchaudio
-        chunk_tensor = torch.tensor(chunk, dtype=torch.float32).unsqueeze(0)
-        resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=STREAM_TARGET_SR)
-        chunk = resampler(chunk_tensor).squeeze(0).numpy()
-        state["sr"] = STREAM_TARGET_SR
-
-    state["buffer"] = np.concatenate([state["buffer"], chunk])
-
-    buffer_duration = state["buffer"].shape[0] / STREAM_TARGET_SR
-    if buffer_duration < STREAM_MIN_DURATION:
-        return "", state
-
-    text = _transcribe_waveform(state["buffer"])
-    return text, state
-
-
-def clear_stream():
-    return "", None
 
 
 # ═══════════════════════ THEME & CSS ═══════════════════════
@@ -165,9 +232,51 @@ body, .gradio-container {
     background: #0a0a0a !important;
     font-family: 'Space Grotesk', sans-serif !important;
 }
+
+/* ══ Width lock ══
+   Three separate things used to widen the page: the audio waveform for a long
+   clip, the example table, and long metric values. They share one root cause —
+   flex and grid children default to `min-width: auto`, so they refuse to shrink
+   below their content and push every ancestor wider. Pinning the container and
+   resetting min-width down the tree is what actually holds the layout still. */
+html, body {
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+}
 .gradio-container {
-    max-width: 900px !important;
+    max-width: 940px !important;
+    width: 100% !important;
     margin: 0 auto !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+    overflow-x: hidden !important;
+}
+.gradio-container .block,
+.gradio-container .form,
+.gradio-container .wrap,
+.gradio-container .panel,
+.gradio-container .column,
+.gradio-container .row,
+.gradio-container > .main,
+.gradio-container > .main > .wrap,
+.gradio-container .gradio-row,
+.gradio-container .gradio-column {
+    min-width: 0 !important;
+    max-width: 100% !important;
+}
+/* Media never dictates layout width. */
+.gradio-container canvas,
+.gradio-container audio,
+.gradio-container img,
+.gradio-container video,
+.gradio-container svg {
+    max-width: 100% !important;
+}
+/* Anything legitimately wide scrolls inside its own box. */
+.gradio-container table,
+.gradio-container .table-wrap {
+    max-width: 100% !important;
+    overflow-x: auto !important;
 }
 
 /* ── Title ── */
@@ -204,40 +313,35 @@ body, .gradio-container {
     font-family: 'Space Grotesk', sans-serif;
 }
 
-/* ── Section Labels ── */
-.section-label {
-    color: #e57373 !important;
-    font-size: 0.78em !important;
-    letter-spacing: 2.5px !important;
-    font-weight: 700 !important;
-    padding-bottom: 10px !important;
-    border-bottom: 1px solid #1a1a1a !important;
-    margin-bottom: 12px !important;
-    font-family: 'Space Grotesk', sans-serif !important;
-}
-
 /* ── Two-Column Layout ── */
 .main-row {
-    gap: 32px !important;
+    gap: 28px !important;
+    align-items: flex-start !important;
 }
-.main-row > div {
-    flex: 1 1 50% !important;
-    min-width: 0 !important;
+@media (max-width: 860px) {
+    .main-row {
+        flex-direction: column !important;
+    }
 }
 
 /* ── Output Text ── */
+/* `unicode-bidi: plaintext` picks direction per line from its first strong
+   character, so Arabic renders right-to-left and English left-to-right in the
+   same box — the demo transcribes both. */
 .output-text textarea {
-    font-size: 1.2em !important;
-    line-height: 2 !important;
-    direction: rtl !important;
-    text-align: right !important;
-    min-height: 200px !important;
+    font-size: 1.15em !important;
+    line-height: 1.9 !important;
+    direction: ltr !important;
+    unicode-bidi: plaintext !important;
+    text-align: start !important;
+    min-height: 220px !important;
     background: #0d0d0d !important;
     color: #f0f0f0 !important;
     border: 1px solid #252525 !important;
     border-radius: 12px !important;
     padding: 20px !important;
     font-family: 'Space Grotesk', sans-serif !important;
+    overflow-wrap: anywhere !important;
 }
 
 /* ── Speed Badge ── */
@@ -262,9 +366,13 @@ body, .gradio-container {
     padding: 16px 20px;
     margin-top: 4px;
 }
+/* Grid tracks with an explicit 0 minimum, so a long value wraps instead of
+   stretching the panel. */
 .metric-row {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+    gap: 4px 14px;
+    align-items: baseline;
     padding: 8px 0;
     border-bottom: 1px solid #151515;
     font-size: 0.88em;
@@ -281,6 +389,9 @@ body, .gradio-container {
     color: #aaa;
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.92em;
+    text-align: right;
+    overflow-wrap: anywhere;
+    min-width: 0;
 }
 
 /* ── Button ── */
@@ -309,46 +420,32 @@ body, .gradio-container {
     margin-top: 6px !important;
 }
 
-/* ── Streaming ── */
-.stream-output textarea {
-    font-size: 1.3em !important;
-    line-height: 1.9 !important;
-    direction: rtl !important;
-    text-align: right !important;
-    min-height: 220px !important;
-    background: #0d0d0d !important;
-    color: #f0f0f0 !important;
-    border: 1px solid #252525 !important;
-    border-radius: 12px !important;
-    padding: 24px !important;
-    font-family: 'Space Grotesk', sans-serif !important;
+/* ── Examples ── */
+.examples-panel {
+    margin-top: 4px !important;
 }
-.pulse-dot {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    background: #e53935;
-    border-radius: 50%;
-    margin-right: 8px;
-    animation: pulse 1.5s ease-in-out infinite;
-}
-@keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.4; transform: scale(0.8); }
-}
-.stream-hint {
-    text-align: center;
-    color: #666;
-    font-size: 0.82em;
-    margin-bottom: 12px;
-}
-.clear-btn button {
-    background: #1a1a1a !important;
-    border: 1px solid #333 !important;
-    color: #aaa !important;
+.examples-panel .gallery-item,
+.examples-panel button.gallery-item {
+    background: #111 !important;
+    border: 1px solid #242424 !important;
+    color: #ccc !important;
     border-radius: 8px !important;
-    font-weight: 600 !important;
-    letter-spacing: 1px !important;
+    font-size: 0.8em !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+    letter-spacing: 0.4px !important;
+    white-space: nowrap !important;
+}
+.examples-panel .gallery-item:hover,
+.examples-panel button.gallery-item:hover {
+    border-color: #e53935 !important;
+    color: #fff !important;
+}
+/* The example list is the one place a horizontal scrollbar is correct — it
+   keeps a long row of chips from widening the page. */
+.examples-panel .gallery,
+.examples-panel .table-wrap {
+    max-width: 100% !important;
+    overflow-x: auto !important;
 }
 
 /* ── About / Footer ── */
@@ -358,6 +455,9 @@ body, .gradio-container {
     border-radius: 12px !important;
     padding: 18px !important;
     color: #888 !important;
+}
+.about-section * {
+    overflow-wrap: anywhere !important;
 }
 .metro-footer {
     text-align: center;
@@ -411,15 +511,17 @@ METRO_THEME = gr.themes.Base(
     block_radius="12px",
 )
 
+_UI_KWARGS = {"theme": METRO_THEME, "css": CSS}
+_BLOCKS_KWARGS = {} if GRADIO_MAJOR >= 6 else dict(_UI_KWARGS)
+_LAUNCH_KWARGS = dict(_UI_KWARGS) if GRADIO_MAJOR >= 6 else {}
+
 
 # ═══════════════════════ UI LAYOUT ═══════════════════════
 
-with gr.Blocks(title="Metro-ASR") as demo:
+with gr.Blocks(title="Metro-ASR", fill_width=False, **_BLOCKS_KWARGS) as demo:
 
     # ── Title ──
-    gr.HTML(
-        '<div class="metro-title">Metro-ASR</div>'
-    )
+    gr.HTML('<div class="metro-title">Metro-ASR</div>')
 
     # ── Tags ──
     gr.HTML(
@@ -429,10 +531,10 @@ with gr.Blocks(title="Metro-ASR") as demo:
         '</div>'
     )
 
-    with gr.Tabs():
+    with gr.Row(elem_classes=["main-row"]):
 
-        # ═══════════════ TAB 1: TRANSCRIBE ═══════════════
-        with gr.Tab("📁 Transcribe"):
+        # ─────────── Left: input ───────────
+        with gr.Column(scale=1):
             audio_input = gr.Audio(
                 type="filepath",
                 label="Upload or record audio",
@@ -442,6 +544,19 @@ with gr.Blocks(title="Metro-ASR") as demo:
                     waveform_progress_color="#ff5252",
                 ),
             )
+
+            if EXAMPLE_PATHS:
+                gr.Examples(
+                    examples=EXAMPLE_PATHS,
+                    inputs=[audio_input],
+                    example_labels=EXAMPLE_LABELS,
+                    label="Examples",
+                    examples_per_page=12,
+                    # Caching would run every clip through beam search at build
+                    # time, which on a cpu-basic Space is slow enough to time out.
+                    cache_examples=False,
+                    elem_id="metro-examples",
+                )
 
             decoding_method = gr.Radio(
                 choices=["Greedy", "Beam Search + LM"],
@@ -456,17 +571,16 @@ with gr.Blocks(title="Metro-ASR") as demo:
                     label="Beam Width",
                     info="Parallel hypotheses",
                 )
-                with gr.Row():
-                    lm_alpha = gr.Slider(
-                        minimum=0.0, maximum=3.0, value=0.5, step=0.1,
-                        label="LM Weight (Alpha)",
-                        info="Language model influence",
-                    )
-                    lm_beta = gr.Slider(
-                        minimum=0.0, maximum=10.0, value=5.0, step=0.5,
-                        label="Word Bonus (Beta)",
-                        info="Prevents word deletion",
-                    )
+                lm_alpha = gr.Slider(
+                    minimum=0.0, maximum=3.0, value=0.5, step=0.1,
+                    label="LM Weight (Alpha)",
+                    info="Language model influence",
+                )
+                lm_beta = gr.Slider(
+                    minimum=0.0, maximum=10.0, value=5.0, step=0.5,
+                    label="Word Bonus (Beta)",
+                    info="Prevents word deletion",
+                )
 
             submit_btn = gr.Button(
                 "TRANSCRIBE",
@@ -475,62 +589,17 @@ with gr.Blocks(title="Metro-ASR") as demo:
                 elem_classes=["transcribe-btn"],
             )
 
+        # ─────────── Right: output ───────────
+        with gr.Column(scale=1):
             output_text = gr.Textbox(
                 label="Transcription",
-                lines=8,
+                lines=9,
                 elem_classes=["output-text"],
-                placeholder="Transcription will appear here...",
+                placeholder="Pick an example or upload audio, then press TRANSCRIBE.",
             )
 
             speed_badge = gr.HTML("")
             stats_output = gr.HTML("")
-
-        # ═══════════════ TAB 2: STREAM ═══════════════
-        with gr.Tab("🎙 Stream"):
-            gr.HTML(
-                '<div class="stream-hint">'
-                '<span class="pulse-dot"></span>'
-                'Speak into your microphone — transcription updates live '
-                '(greedy decoding)'
-                '</div>'
-            )
-
-            stream_state = gr.State(None)
-
-            stream_audio = gr.Audio(
-                sources=["microphone"],
-                streaming=True,
-                type="numpy",
-                label="Microphone",
-                waveform_options=gr.WaveformOptions(
-                    waveform_color="#e53935",
-                    waveform_progress_color="#ff5252",
-                ),
-            )
-
-            stream_output = gr.Textbox(
-                label="Transcription",
-                lines=8,
-                elem_classes=["stream-output"],
-                placeholder="Start speaking...",
-                interactive=False,
-            )
-
-            stream_clear_btn = gr.Button(
-                "CLEAR",
-                elem_classes=["clear-btn"],
-            )
-
-            stream_audio.stream(
-                fn=transcribe_streaming,
-                inputs=[stream_audio, stream_state],
-                outputs=[stream_output, stream_state],
-            )
-
-            stream_clear_btn.click(
-                fn=clear_stream,
-                outputs=[stream_output, stream_state],
-            )
 
     # ── About ──
     with gr.Accordion("About Metro-ASR", open=False):
@@ -568,7 +637,6 @@ if __name__ == "__main__":
         server_name="0.0.0.0",
         server_port=SERVER_PORT,
         share=SHARE,
-        theme=METRO_THEME,
-        css=CSS,
         ssr_mode=False,
+        **_LAUNCH_KWARGS,
     )
